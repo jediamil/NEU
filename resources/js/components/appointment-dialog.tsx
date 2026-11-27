@@ -2,7 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { CalendarDays, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Field } from '@/components/clinic-ui';
+import { Field, timeLabel } from '@/components/clinic-ui';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -29,20 +29,41 @@ export function AppointmentDialog({
     services: Record<string, string>;
     onClose: () => void;
 }) {
-    const dates = [...new Set(slots.map((slot) => slot.date))];
+    const currentDate = appointment?.starts_at.slice(0, 10);
+    const choices =
+        appointment && !slots.some((slot) => slot.id === appointment.slot_id)
+            ? [
+                  {
+                      id: appointment.slot_id,
+                      date: currentDate!,
+                      label:
+                          'Existing time · ' + timeLabel(appointment.starts_at),
+                      capacity: 0,
+                      reserved: 0,
+                      remaining: 1,
+                      period: null,
+                  },
+                  ...slots,
+              ]
+            : slots;
+    function remaining(slot: AppointmentSlot) {
+        if (slot.period == null) return 1;
+        const sameDay = slot.date === currentDate;
+        return Math.max(
+            0,
+            Math.min(
+                (slot.period_remaining ?? slot.remaining) +
+                    (sameDay && slot.period === appointment?.period ? 1 : 0),
+                (slot.daily_remaining ?? slot.remaining) + (sameDay ? 1 : 0),
+            ),
+        );
+    }
     const [date, setDate] = useState(
-        appointment
-            ? (slots.find((slot) => slot.id === appointment.slot_id)?.date ??
-                  dates[0] ??
-                  '')
-            : (dates[0] ?? ''),
+        appointment ? currentDate! : (choices[0]?.date ?? ''),
     );
     const form = useForm({
         student_id: appointment ? String(appointment.student.id) : '',
-        appointment_slot_id:
-            appointment && slots.some((slot) => slot.id === appointment.slot_id)
-                ? String(appointment.slot_id)
-                : '',
+        appointment_slot_id: appointment ? String(appointment.slot_id) : '',
         service: appointment?.service ?? 'physical_exam',
         notes: appointment?.notes ?? '',
     });
@@ -70,8 +91,8 @@ export function AppointmentDialog({
                             : 'New appointment'}
                     </DialogTitle>
                     <DialogDescription>
-                        Reserve a clinic visit for a student. All transaction
-                        types share the available slots.
+                        Choose Morning or Afternoon. All services share period
+                        and daily capacity.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="mt-2 space-y-5">
@@ -110,6 +131,12 @@ export function AppointmentDialog({
                                 form.setData('service', e.target.value)
                             }
                         >
+                            {appointment && !services[appointment.service] && (
+                                <option value={appointment.service}>
+                                    {appointment.service_label} (existing
+                                    service)
+                                </option>
+                            )}
                             {Object.entries(services).map(([value, label]) => (
                                 <option key={value} value={value}>
                                     {label}
@@ -119,32 +146,19 @@ export function AppointmentDialog({
                     </Field>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <Field label="Appointment date" htmlFor="booking-date">
-                            <select
+                            <Input
                                 id="booking-date"
-                                className="field-input"
+                                type="date"
                                 value={date}
                                 onChange={(e) => {
                                     setDate(e.target.value);
                                     form.setData('appointment_slot_id', '');
                                 }}
                                 required
-                            >
-                                <option value="">Choose a date</option>
-                                {dates.map((day) => (
-                                    <option key={day} value={day}>
-                                        {new Date(
-                                            day + 'T00:00:00',
-                                        ).toLocaleDateString('en-PH', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            weekday: 'short',
-                                        })}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </Field>
                         <Field
-                            label="Time slot"
+                            label="Booking period"
                             htmlFor="booking-time"
                             error={form.errors.appointment_slot_id}
                         >
@@ -160,21 +174,17 @@ export function AppointmentDialog({
                                 }
                                 required
                             >
-                                <option value="">Choose a time</option>
-                                {slots
+                                <option value="">Choose a period</option>
+                                {choices
                                     .filter((slot) => slot.date === date)
                                     .map((slot) => (
                                         <option
                                             key={slot.id}
                                             value={slot.id}
-                                            disabled={
-                                                slot.remaining === 0 &&
-                                                slot.id !== appointment?.slot_id
-                                            }
+                                            disabled={remaining(slot) === 0}
                                         >
                                             {slot.label}{' '}
-                                            {slot.remaining === 0 &&
-                                            slot.id !== appointment?.slot_id
+                                            {remaining(slot) === 0
                                                 ? '· Full'
                                                 : ''}
                                         </option>
@@ -182,10 +192,10 @@ export function AppointmentDialog({
                             </select>
                         </Field>
                     </div>
-                    {!slots.length && (
+                    {!choices.some((slot) => slot.date === date) && (
                         <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                            No future clinic slots are available. Create or open
-                            a clinic schedule first.
+                            No booking periods are available for this date.
+                            Choose another date or open a clinic schedule.
                         </p>
                     )}
                     <Field
@@ -215,7 +225,10 @@ export function AppointmentDialog({
                         </Button>
                         <Button
                             type="submit"
-                            disabled={form.processing || !slots.length}
+                            disabled={
+                                form.processing ||
+                                !form.data.appointment_slot_id
+                            }
                         >
                             {form.processing && (
                                 <LoaderCircle className="size-4 animate-spin" />

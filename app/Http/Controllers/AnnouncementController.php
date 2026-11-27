@@ -15,10 +15,11 @@ class AnnouncementController extends Controller
     {
         $search = mb_substr($request->string('search')->toString(), 0, 100);
         $announcements = Announcement::query()->when($search, fn ($query) => $query->where(fn ($query) => $query->where('title', 'like', '%'.$search.'%')->orWhere('body', 'like', '%'.$search.'%')))->latest()->paginate(9)->withQueryString();
+        $counts = Announcement::query()->toBase()->selectRaw('COUNT(*) AS total, COUNT(published_at) AS published')->first();
 
         return Inertia::render('announcements/index', [
             'announcements' => $announcements, 'filters' => ['search' => $search],
-            'counts' => ['all' => Announcement::query()->count(), 'published' => Announcement::query()->whereNotNull('published_at')->count(), 'draft' => Announcement::query()->whereNull('published_at')->count()],
+            'counts' => ['all' => (int) $counts->total, 'published' => (int) $counts->published, 'draft' => (int) $counts->total - (int) $counts->published],
         ]);
     }
 

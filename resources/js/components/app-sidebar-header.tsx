@@ -11,11 +11,14 @@ import {
 } from '@/components/ui/dialog';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
+import type { PortalLiveStatus } from '@/hooks/use-portal-realtime';
 
 export function AppSidebarHeader({
     breadcrumbs = [],
+    liveStatus = null,
 }: {
     breadcrumbs?: BreadcrumbItemType[];
+    liveStatus?: PortalLiveStatus;
 }) {
     const [help, setHelp] = useState(false);
     return (
@@ -27,9 +30,18 @@ export function AppSidebarHeader({
                     <Breadcrumbs breadcrumbs={breadcrumbs} />
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="hidden items-center gap-1.5 rounded-md border border-primary/10 bg-primary/5 px-2.5 py-1 text-[9px] font-medium tracking-wide text-primary sm:inline-flex">
+                    <span
+                        role="status"
+                        aria-live="polite"
+                        title={
+                            liveStatus === 'Live'
+                                ? 'Clinic changes update automatically through Neon Realtime'
+                                : 'Clinic portal connection status'
+                        }
+                        className="hidden items-center gap-1.5 rounded-md border border-primary/10 bg-primary/5 px-2.5 py-1 text-[9px] font-medium tracking-wide text-primary sm:inline-flex"
+                    >
                         <span className="size-1 rounded-full bg-primary" />
-                        PROTOTYPE
+                        {liveStatus ?? 'CLINIC PORTAL'}
                     </span>
                     <Button
                         variant="ghost"
@@ -46,7 +58,7 @@ export function AppSidebarHeader({
                     <DialogHeader>
                         <DialogTitle>Your clinic workspace</DialogTitle>
                         <DialogDescription>
-                            A quick guide to the NEU Health Portal prototype.
+                            A quick guide to the NEU Health Portal.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 text-sm leading-6 text-muted-foreground">
@@ -65,8 +77,8 @@ export function AppSidebarHeader({
                         </p>
                         <p className="flex items-center gap-2 rounded-lg bg-muted p-3 text-xs">
                             <BellRing className="size-4 shrink-0" />
-                            This prototype uses sample records. Changes are
-                            saved for your next visit.
+                            Clinic records are shared with the student mobile
+                            app. Changes are saved for your next visit.
                         </p>
                     </div>
                 </DialogContent>

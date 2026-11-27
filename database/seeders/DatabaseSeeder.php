@@ -18,7 +18,7 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        if (! app()->environment(['local', 'testing'])) {
+        if (! app()->environment(['local', 'testing']) || ! config('clinic.demo_data')) {
             return;
         }
 
@@ -35,7 +35,8 @@ class DatabaseSeeder extends Seeder
                 'program' => $programs[$index % count($programs)], 'year_level' => ($index % 4) + 1,
             ]);
             $status = $index % 5 < 2 ? 'cleared' : ($index % 5 === 2 ? 'incomplete' : 'pending');
-            $student->clearance()->firstOrCreate(['student_id' => $student->id], [
+            $student->clearances()->firstOrCreate(['school_year' => config('clinic.active_school_year')], [
+                'student_snapshot' => $student->clearanceSnapshot(),
                 'status' => $status, 'physical_exam' => $status !== 'pending', 'documents_received' => $status === 'cleared', 'xray_verified' => $status === 'cleared',
                 'notes' => $status === 'incomplete' ? 'Please bring the remaining enrollment documents for verification.' : null,
                 'reviewed_by' => $status !== 'pending' ? $clinic->id : null, 'reviewed_at' => $status !== 'pending' ? now()->subDay() : null,
@@ -50,22 +51,22 @@ class DatabaseSeeder extends Seeder
                 continue;
             }
             $schedule = ClinicSchedule::query()->firstOrCreate(['date' => $date->toDateString()], [
-                'opening_time' => '08:00', 'closing_time' => '17:00', 'slot_minutes' => 30,
-                'slot_capacity' => 3, 'daily_capacity' => 40, 'is_open' => true,
+                'opening_time' => '08:00', 'closing_time' => '16:00', 'slot_minutes' => 30,
+                'slot_capacity' => 3, 'morning_capacity' => 20, 'afternoon_capacity' => 20, 'daily_capacity' => 40, 'is_open' => true,
             ]);
             $schedule->generateSlots();
-            $slots = $schedule->slots()->orderBy('starts_at')->get();
+            $slots = $schedule->slots()->whereNotNull('period')->orderBy('starts_at')->get();
             if ($slots->isEmpty() || $offset > 9) {
                 continue;
             }
 
             for ($i = 0; $i < 8; $i++) {
-                $slot = $slots[($i * 2) % $slots->count()];
+                $slot = $slots[$i % $slots->count()];
                 $status = $offset < 0 ? ($i === 7 ? 'no_show' : 'completed') : ($offset === 0 ? ($i < 2 ? 'completed' : ($i < 4 ? 'checked_in' : 'scheduled')) : 'scheduled');
                 Appointment::query()->firstOrCreate(['reference' => 'NEU-DEMO-'.$date->format('ymd').'-'.str_pad((string) ($i + 1), 3, '0', STR_PAD_LEFT)], [
                     'student_id' => $students[(($offset + 2) * 8 + $i) % $students->count()]->id,
                     'appointment_slot_id' => $slot->id, 'created_by' => $clinic->id,
-                    'service' => array_keys(Appointment::SERVICES)[$i % 3], 'status' => $status,
+                    'service' => array_keys(Appointment::SERVICES)[$i % count(Appointment::SERVICES)], 'status' => $status,
                     'checked_in_at' => in_array($status, ['checked_in', 'completed'], true) ? $slot->starts_at : null,
                     'completed_at' => $status === 'completed' ? $slot->ends_at : null,
                 ]);

@@ -115,11 +115,11 @@ test('daily capacity applies across different time slots', function () {
     $user = User::factory()->create();
     $schedule = ClinicSchedule::factory()->create(['daily_capacity' => 1]);
     $first = AppointmentSlot::factory()->for($schedule, 'schedule')->create();
-    $second = AppointmentSlot::factory()->for($schedule, 'schedule')->create(['starts_at' => $schedule->date->setTime(10, 0), 'ends_at' => $schedule->date->setTime(10, 30)]);
+    $second = AppointmentSlot::factory()->afternoon()->for($schedule, 'schedule')->create();
     Appointment::factory()->for($first, 'slot')->create();
     $student = Student::factory()->create();
 
-    $this->actingAs($user)->post(route('appointments.store'), ['student_id' => $student->id, 'appointment_slot_id' => $second->id, 'service' => 'document_submission'])
+    $this->actingAs($user)->post(route('appointments.store'), ['student_id' => $student->id, 'appointment_slot_id' => $second->id, 'service' => 'dental_consultation'])
         ->assertSessionHasErrors(['appointment_slot_id' => 'The clinic has reached its daily appointment capacity.']);
 
     $this->assertDatabaseCount('appointments', 1);
@@ -141,7 +141,7 @@ test('the same student cannot reserve a time slot twice', function () {
     $user = User::factory()->create();
     $appointment = Appointment::factory()->create();
 
-    $this->actingAs($user)->post(route('appointments.store'), ['student_id' => $appointment->student_id, 'appointment_slot_id' => $appointment->appointment_slot_id, 'service' => 'document_submission'])
+    $this->actingAs($user)->post(route('appointments.store'), ['student_id' => $appointment->student_id, 'appointment_slot_id' => $appointment->appointment_slot_id, 'service' => 'dental_consultation'])
         ->assertSessionHasErrors('student_id');
 
     $this->assertDatabaseCount('appointments', 1);
@@ -166,7 +166,7 @@ test('cancelling an appointment releases capacity for another student', function
     $student = Student::factory()->create();
 
     $this->actingAs($user)->patch(route('appointments.status', $appointment), ['status' => 'cancelled'])->assertSessionHasNoErrors();
-    $this->actingAs($user)->post(route('appointments.store'), ['student_id' => $student->id, 'appointment_slot_id' => $slot->id, 'service' => 'document_submission'])->assertSessionHasNoErrors();
+    $this->actingAs($user)->post(route('appointments.store'), ['student_id' => $student->id, 'appointment_slot_id' => $slot->id, 'service' => 'tooth_extraction'])->assertSessionHasNoErrors();
 
     $this->assertDatabaseHas('appointments', ['id' => $appointment->id, 'status' => 'cancelled']);
     $this->assertDatabaseHas('appointments', ['student_id' => $student->id, 'status' => 'scheduled']);
@@ -210,7 +210,7 @@ test('clearance cannot be issued with missing requirements', function () {
     $user = User::factory()->create();
     $student = Student::factory()->create();
 
-    $this->actingAs($user)->patch(route('clearances.update', $student), ['status' => 'cleared', 'physical_exam' => true, 'documents_received' => false, 'xray_verified' => true])
+    $this->actingAs($user)->patch(route('clearances.update', $student), ['school_year' => '2026-2027', 'status' => 'cleared', 'physical_exam' => true, 'documents_received' => false, 'xray_verified' => true])
         ->assertSessionHasErrors(['status' => 'Complete all three requirements before issuing medical clearance.']);
 
     $this->assertDatabaseMissing('clearances', ['student_id' => $student->id, 'status' => 'cleared']);
@@ -220,7 +220,7 @@ test('a completed checklist can receive clearance with reviewer information', fu
     $user = User::factory()->create();
     $student = Student::factory()->create();
 
-    $this->actingAs($user)->patch(route('clearances.update', $student), ['status' => 'cleared', 'physical_exam' => true, 'documents_received' => true, 'xray_verified' => true, 'notes' => 'Verified.'])->assertSessionHasNoErrors();
+    $this->actingAs($user)->patch(route('clearances.update', $student), ['school_year' => '2026-2027', 'status' => 'cleared', 'physical_exam' => true, 'documents_received' => true, 'xray_verified' => true, 'notes' => 'Verified.'])->assertSessionHasNoErrors();
 
     $this->assertDatabaseHas('clearances', ['student_id' => $student->id, 'status' => 'cleared', 'reviewed_by' => $user->id, 'notes' => 'Verified.']);
 });
@@ -238,17 +238,16 @@ test('clinic staff can publish and unpublish an announcement', function () {
     $this->assertDatabaseHas('announcements', ['title' => 'Clinic update', 'body' => 'Bring your appointment reference.']);
 });
 
-test('a clinic day generates slots around the midday break', function () {
+test('a clinic day generates the two fixed booking periods', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->post(route('schedules.store'), [
-        'date' => '2026-11-19', 'opening_time' => '11:00', 'closing_time' => '14:00',
-        'slot_minutes' => 30, 'slot_capacity' => 3, 'daily_capacity' => 12, 'is_open' => true,
+        'date' => '2026-11-19', 'morning_capacity' => 6, 'afternoon_capacity' => 6, 'daily_capacity' => 12, 'is_open' => true,
     ])->assertSessionHasNoErrors();
 
-    $this->assertDatabaseCount('appointment_slots', 4);
+    $this->assertDatabaseCount('appointment_slots', 2);
     expect(AppointmentSlot::query()->orderBy('starts_at')->get()->map(fn ($slot) => $slot->starts_at->format('H:i'))->all())
-        ->toBe(['11:00', '11:30', '13:00', '13:30']);
+        ->toBe(['08:00', '13:00']);
 });
 
 test('capacity cannot be reduced below existing reservations', function () {
@@ -258,9 +257,8 @@ test('capacity cannot be reduced below existing reservations', function () {
     Appointment::factory()->count(2)->for($slot, 'slot')->create();
 
     $this->actingAs($user)->patch(route('schedules.update', $schedule), [
-        'date' => '2026-11-19', 'opening_time' => '08:00', 'closing_time' => '17:00',
-        'slot_minutes' => 30, 'slot_capacity' => 1, 'daily_capacity' => 48, 'is_open' => true,
-    ])->assertSessionHasErrors('slot_capacity');
+        'date' => '2026-11-19', 'morning_capacity' => 1, 'afternoon_capacity' => 24, 'daily_capacity' => 48, 'is_open' => true,
+    ])->assertSessionHasErrors('morning_capacity');
 
     $this->assertDatabaseHas('appointment_slots', ['id' => $slot->id, 'capacity' => 3]);
 });
@@ -272,8 +270,7 @@ test('closing a day preserves its existing appointments', function () {
     $appointment = Appointment::factory()->for($slot, 'slot')->create();
 
     $this->actingAs($user)->patch(route('schedules.update', $schedule), [
-        'date' => '2026-11-19', 'opening_time' => '08:00', 'closing_time' => '17:00',
-        'slot_minutes' => 30, 'slot_capacity' => 3, 'daily_capacity' => 48, 'is_open' => false,
+        'date' => '2026-11-19', 'morning_capacity' => 24, 'afternoon_capacity' => 24, 'daily_capacity' => 48, 'is_open' => false,
     ])->assertSessionHasNoErrors();
 
     $this->assertDatabaseHas('clinic_schedules', ['id' => $schedule->id, 'is_open' => false]);
@@ -291,6 +288,7 @@ test('the dashboard displays actual saved appointment counts', function () {
 });
 
 test('seeding is repeatable and preserves changes to demo records', function () {
+    config(['clinic.demo_data' => true]);
     $this->seed();
     $appointment = Appointment::query()->firstOrFail();
     $appointment->update(['status' => 'cancelled']);

@@ -28,6 +28,7 @@ import { index as announcements } from '@/routes/announcements';
 import { index as appointments } from '@/routes/appointments';
 import { index as clearances } from '@/routes/clearances';
 import { index as schedules } from '@/routes/schedules';
+import { index as scheduledStudents } from '@/routes/scheduled-students';
 import { index as students } from '@/routes/students';
 import type { NavItem } from '@/types';
 
@@ -45,6 +46,11 @@ export function AppSidebar() {
                   icon: CalendarDays,
               },
               { title: 'Student records', href: students(), icon: Users },
+              {
+                  title: 'Scheduled students',
+                  href: scheduledStudents(),
+                  icon: CalendarRange,
+              },
               {
                   title: 'Medical clearances',
                   href: clearances(),

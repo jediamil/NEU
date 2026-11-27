@@ -58,6 +58,11 @@ export function AppointmentTable({
                                         </div>
                                         <div className="mt-1 text-[10px] text-muted-foreground">
                                             {appointment.student.student_number}
+                                            <span className="mt-1 block">
+                                                {appointment.student.program} ·
+                                                Year{' '}
+                                                {appointment.student.year_level}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -73,12 +78,24 @@ export function AppointmentTable({
                             <td>
                                 <div className="text-xs whitespace-nowrap">
                                     {compact
-                                        ? timeLabel(appointment.starts_at)
+                                        ? appointment.legacy_time
+                                            ? timeLabel(appointment.starts_at)
+                                            : appointment.period === 'morning'
+                                              ? 'Morning'
+                                              : 'Afternoon'
                                         : dateLabel(appointment.starts_at)}
                                 </div>
                                 {!compact && (
                                     <div className="mt-1 text-[10px] text-muted-foreground">
-                                        {timeLabel(appointment.starts_at)}
+                                        {appointment.legacy_time
+                                            ? timeLabel(appointment.starts_at) +
+                                              ' (existing time)'
+                                            : (appointment.period === 'morning'
+                                                  ? 'Morning · '
+                                                  : 'Afternoon · ') +
+                                              timeLabel(appointment.starts_at) +
+                                              '–' +
+                                              timeLabel(appointment.ends_at)}
                                     </div>
                                 )}
                             </td>

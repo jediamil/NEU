@@ -12,6 +12,6 @@ class ClearanceFactory extends Factory
     /** @return array<string, mixed> */
     public function definition(): array
     {
-        return ['student_id' => Student::factory(), 'status' => 'pending', 'physical_exam' => false, 'documents_received' => false, 'xray_verified' => false];
+        return ['student_id' => Student::factory(), 'school_year' => config('clinic.active_school_year'), 'status' => 'pending', 'physical_exam' => false, 'documents_received' => false, 'xray_verified' => false];
     }
 }

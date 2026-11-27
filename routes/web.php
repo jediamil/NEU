@@ -5,16 +5,21 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\ClearanceController;
 use App\Http\Controllers\ClinicScheduleController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\RealtimeController;
+use App\Http\Controllers\ScheduledStudentController;
 use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => auth()->check() ? to_route('dashboard') : to_route('login'))->name('home');
 
 Route::middleware(['auth', 'verified', 'can:access-portal'])->group(function (): void {
+    Route::post('realtime/subscription', RealtimeController::class)->middleware('throttle:30,1')->name('realtime.subscription');
     Route::get('dashboard', DashboardController::class)->name('dashboard');
     Route::get('clearances', [ClearanceController::class, 'index'])->name('clearances.index');
 
     Route::middleware('can:manage-clinic')->group(function (): void {
+        Route::get('scheduled-students', ScheduledStudentController::class)->name('scheduled-students.index');
+        Route::get('clearances/{student}', [ClearanceController::class, 'show'])->name('clearances.show');
         Route::get('appointments', [AppointmentController::class, 'index'])->name('appointments.index');
         Route::post('appointments', [AppointmentController::class, 'store'])->name('appointments.store');
         Route::patch('appointments/{appointment}', [AppointmentController::class, 'update'])->name('appointments.update');

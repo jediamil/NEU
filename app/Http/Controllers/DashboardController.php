@@ -6,7 +6,6 @@ use App\Models\Announcement;
 use App\Models\Appointment;
 use App\Models\Clearance;
 use App\Models\ClinicSchedule;
-use App\Models\Student;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,22 +17,19 @@ class DashboardController extends Controller
         $today = now()->toDateString();
         $clinic = $request->user()?->role === 'clinic';
         $todayQuery = Appointment::query()->whereHas('slot', fn ($query) => $query->whereDate('starts_at', $today));
-        $reserved = (clone $todayQuery)->where('status', '!=', 'cancelled')->count();
-        $schedule = ClinicSchedule::query()->whereDate('date', $today)->first();
-        $breakdown = [
-            'cleared' => Clearance::query()->where('status', 'cleared')->count(),
-            'incomplete' => Clearance::query()->where('status', 'incomplete')->count(),
-            'pending' => Student::query()->whereDoesntHave('clearance', fn ($query) => $query->whereIn('status', ['cleared', 'incomplete']))->count(),
-        ];
+        $todayCounts = $clinic ? Appointment::statusCounts(clone $todayQuery) : ['all' => 0, 'checked_in' => 0, 'reserved' => 0];
+        $schedule = $clinic ? ClinicSchedule::query()->where('date', $today)->first() : null;
+        $counts = Clearance::statusCountsForYear(config('clinic.active_school_year'));
+        $breakdown = ['cleared' => $counts['cleared'], 'incomplete' => $counts['incomplete'], 'pending' => $counts['pending']];
 
         return Inertia::render('dashboard', [
             'today' => now()->format('l, F j, Y'),
             'stats' => [
-                'appointments' => $clinic ? (clone $todayQuery)->count() : 0,
-                'checked_in' => $clinic ? (clone $todayQuery)->where('status', 'checked_in')->count() : 0,
+                'appointments' => $todayCounts['all'],
+                'checked_in' => $todayCounts['checked_in'],
                 'pending_clearances' => $breakdown['pending'] + $breakdown['incomplete'],
-                'remaining_capacity' => $clinic && $schedule?->is_open ? max(0, $schedule->daily_capacity - $reserved) : 0,
-                'students' => Student::query()->count(),
+                'remaining_capacity' => $clinic && $schedule?->is_open ? max(0, $schedule->daily_capacity - $todayCounts['reserved']) : 0,
+                'students' => $counts['all'],
                 'cleared' => $breakdown['cleared'],
             ],
             'appointments' => $clinic ? (clone $todayQuery)->with(['student', 'slot'])->orderByRaw("CASE status WHEN 'checked_in' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END")->latest('id')->limit(7)->get()->map(fn (Appointment $appointment) => $appointment->summary()) : [],

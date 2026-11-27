@@ -38,7 +38,8 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
-            'prototypeMode' => app()->environment('local'),
+            'prototypeMode' => app()->environment('local') && config('clinic.demo_data'),
+            'realtime' => ['url' => config('services.neon.realtime_url')],
             'flash' => ['success' => $request->session()->get('success'), 'error' => $request->session()->get('error')],
             'auth' => [
                 'user' => $request->user(),

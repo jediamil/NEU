@@ -16,8 +16,14 @@ class ManageAppointment
     public function book(array $data, User $user, ?Appointment $appointment = null): Appointment
     {
         return DB::transaction(function () use ($data, $user, $appointment): Appointment {
-            $slot = AppointmentSlot::query()->with('schedule')->lockForUpdate()->whereKey($data['appointment_slot_id'])->firstOrFail();
+            $slot = AppointmentSlot::query()->whereKey($data['appointment_slot_id'])->firstOrFail();
             $schedule = ClinicSchedule::query()->lockForUpdate()->findOrFail($slot->clinic_schedule_id);
+            $slot = AppointmentSlot::query()->lockForUpdate()->findOrFail($slot->id);
+
+            $keepingLegacyTime = $appointment !== null && $appointment->appointment_slot_id === $slot->id && $appointment->student_id === (int) $data['student_id'];
+            if ($slot->period === null && ! $keepingLegacyTime) {
+                throw ValidationException::withMessages(['appointment_slot_id' => 'Choose a Morning or Afternoon booking period.']);
+            }
 
             if (! $schedule->is_open || $slot->starts_at->lte(now())) {
                 throw ValidationException::withMessages(['appointment_slot_id' => 'Choose a future appointment slot on an open clinic day.']);
@@ -35,6 +41,16 @@ class ManageAppointment
 
             if ((clone $reservations)->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id))->count() >= $schedule->daily_capacity) {
                 throw ValidationException::withMessages(['appointment_slot_id' => 'The clinic has reached its daily appointment capacity.']);
+            }
+
+            $periodReservations = (clone $reservations)->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id)->inPeriod($slot->bookingPeriod()));
+            $periodCapacity = $slot->bookingPeriod() === 'morning' ? $schedule->morning_capacity : $schedule->afternoon_capacity;
+            if ((clone $periodReservations)->count() >= $periodCapacity) {
+                throw ValidationException::withMessages(['appointment_slot_id' => 'This booking period is fully booked. Please choose another period.']);
+            }
+
+            if (! $keepingLegacyTime && (clone $periodReservations)->where('student_id', $data['student_id'])->exists()) {
+                throw ValidationException::withMessages(['student_id' => 'This student already has an appointment in this booking period.']);
             }
 
             if ((clone $reservations)->where('student_id', $data['student_id'])->where('appointment_slot_id', $slot->id)->exists()) {

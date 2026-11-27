@@ -1,0 +1,25 @@
+{
+    "cli": {
+        "version": ">= 27.5.0",
+        "appVersionSource": "local"
+    },
+    "build": {
+        "sideload": {
+            "distribution": "internal",
+            "developmentClient": false,
+            "node": "24.21.0",
+            "ios": {
+                "withoutCredentials": true,
+                "simulator": false,
+                "resourceClass": "medium",
+                "buildConfiguration": "Release",
+                "config": "ios-sideload.yml",
+                "applicationArchivePath": "artifacts/NEU-Health-Student-Production.ipa"
+            },
+            "env": {
+                "EXPO_PUBLIC_NEU_API_URL": "https://br-quiet-frog-bd0ipaom-studentapi.compute.c-8.us-east-2.aws.neon.tech/",
+                "EXPO_PUBLIC_NEU_REALTIME_URL": "wss://ep-lively-wind-bd0xxkjp.rt.c-8.us-east-2.aws.neon.tech/"
+            }
+        }
+    }
+}

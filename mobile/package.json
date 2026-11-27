@@ -1,0 +1,52 @@
+{
+    "name": "neu-health-student",
+    "version": "0.3.0",
+    "private": true,
+    "type": "module",
+    "main": "expo-router/entry",
+    "scripts": {
+        "start": "expo start",
+        "ios": "expo start --ios",
+        "web": "expo start --web",
+        "types:check": "tsc --noEmit",
+        "test": "node --test tests/*.test.ts",
+        "build:ios": "expo export --platform ios --output-dir dist-ios",
+        "build": "npm run types:check && expo export --platform ios --output-dir dist-ios && expo export --platform web --output-dir dist",
+        "db:migrate": "node --env-file=.env.local backend/migrate.ts",
+        "test:live": "node --env-file=.env.local --test --test-force-exit tests/live.integration.ts",
+        "lint": "..\\node_modules\\.bin\\vp.cmd lint App.tsx src backend scripts tests/live.integration.ts tests/web-session.ts tests/connected-availability.test.ts",
+        "neon:deploy": "neon deploy --env .env.local --profile neu-mobile"
+    },
+    "dependencies": {
+        "@expo/vector-icons": "^15.0.2",
+        "@neon/auth": "^0.8.2",
+        "@neon/config": "^1.14.6",
+        "@neon/env": "^2.1.9",
+        "@neon/functions": "^0.11.0",
+        "@neon/realtime": "^0.2.1",
+        "@react-native-async-storage/async-storage": "2.2.0",
+        "expo": "~58.0.26",
+        "expo-clipboard": "~58.0.4",
+        "expo-constants": "~58.0.16",
+        "expo-font": "~58.0.12",
+        "expo-linking": "~58.0.17",
+        "expo-router": "~58.0.32",
+        "expo-secure-store": "~58.0.3",
+        "expo-status-bar": "~58.0.5",
+        "hono": "^4.13.21",
+        "jose": "^6.2.18",
+        "pg": "^8.23.1",
+        "react": "19.3.0",
+        "react-dom": "19.3.0",
+        "react-native": "0.88.1",
+        "react-native-safe-area-context": "~5.11.1",
+        "react-native-screens": "~4.30.1",
+        "react-native-web": "^0.21.4"
+    },
+    "devDependencies": {
+        "@types/node": "^24.19.2",
+        "@types/pg": "^8.23.1",
+        "@types/react": "~19.3.0",
+        "typescript": "~6.0.3"
+    }
+}

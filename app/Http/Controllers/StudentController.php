@@ -20,7 +20,7 @@ class StudentController extends Controller
             ->when($search, fn ($query) => $query->where(fn ($query) => $query->where('name', 'like', '%'.$search.'%')->orWhere('student_number', 'like', '%'.$search.'%')->orWhere('program', 'like', '%'.$search.'%')))
             ->orderBy('name')->paginate(12)->withQueryString();
 
-        return Inertia::render('students/index', ['students' => $students, 'filters' => ['search' => $search], 'total' => Student::query()->count()]);
+        return Inertia::render('students/index', ['students' => $students, 'filters' => ['search' => $search], 'total' => $search === '' ? $students->total() : Student::query()->count()]);
     }
 
     public function show(Student $student): Response
@@ -28,6 +28,8 @@ class StudentController extends Controller
         return Inertia::render('students/show', [
             'student' => $student->load('clearance'),
             'appointments' => $student->appointments()->with(['student', 'slot'])->latest()->get()->map(fn (Appointment $appointment) => $appointment->summary()),
+            'clearance_history' => $student->clearances()->orderByDesc('school_year')->get(['id', 'school_year', 'status', 'student_snapshot', 'reviewed_at']),
+            'active_school_year' => config('clinic.active_school_year'),
         ]);
     }
 
@@ -35,7 +37,7 @@ class StudentController extends Controller
     {
         DB::transaction(function () use ($request): void {
             $student = Student::query()->create($request->validated());
-            $student->clearance()->create(['status' => 'pending']);
+            $student->clearances()->create(['school_year' => config('clinic.active_school_year'), 'status' => 'pending', 'student_snapshot' => $student->clearanceSnapshot()]);
         });
 
         return back()->with('success', 'Student record has been created.');

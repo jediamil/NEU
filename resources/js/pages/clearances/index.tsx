@@ -1,4 +1,4 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import {
     Check,
     ClipboardCheck,
@@ -6,8 +6,6 @@ import {
     Search,
     ShieldCheck,
 } from 'lucide-react';
-import { useState } from 'react';
-import { ClearanceDialog } from '@/components/clearance-dialog';
 import {
     dateLabel,
     EmptyState,
@@ -19,7 +17,9 @@ import {
     StudentAvatar,
 } from '@/components/clinic-ui';
 import { Button } from '@/components/ui/button';
-import { index } from '@/routes/clearances';
+import { Input } from '@/components/ui/input';
+import InputError from '@/components/input-error';
+import { index, show } from '@/routes/clearances';
 import type { Paginated, Student } from '@/types/clinic';
 
 export default function Clearances({
@@ -36,8 +36,8 @@ export default function Clearances({
         cleared: number;
     };
 }) {
-    const clinic = usePage().props.auth.user.role === 'clinic';
-    const [reviewing, setReviewing] = useState<Student | null>(null);
+    const { auth, errors } = usePage().props;
+    const clinic = auth.user.role === 'clinic';
     return (
         <>
             <Head title="Medical clearances" />
@@ -88,11 +88,25 @@ export default function Clearances({
                     />
                 </div>
                 <section className="panel">
+                    {errors.school_year && (
+                        <div className="px-4 pt-4">
+                            <InputError message={errors.school_year} />
+                        </div>
+                    )}
                     <SearchFilters
                         url={index.url()}
                         filters={filters}
                         placeholder="Search student name or number..."
                     >
+                        <Input
+                            name="school_year"
+                            aria-label="School year"
+                            defaultValue={filters.school_year}
+                            placeholder="2026-2027"
+                            pattern="[0-9]{4}-[0-9]{4}"
+                            className="h-10 w-36"
+                            required
+                        />
                         <select
                             name="status"
                             defaultValue={filters.status ?? ''}
@@ -215,14 +229,22 @@ export default function Clearances({
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() =>
-                                                            setReviewing(
-                                                                student,
-                                                            )
-                                                        }
+                                                        asChild
                                                         className="h-8 text-[11px]"
                                                     >
-                                                        Review
+                                                        <Link
+                                                            href={show(
+                                                                student.id,
+                                                                {
+                                                                    query: {
+                                                                        school_year:
+                                                                            filters.school_year,
+                                                                    },
+                                                                },
+                                                            )}
+                                                        >
+                                                            Open record
+                                                        </Link>
                                                     </Button>
                                                 </td>
                                             )}
@@ -240,12 +262,6 @@ export default function Clearances({
                     <Pagination data={students} />
                 </section>
             </div>
-            {reviewing && (
-                <ClearanceDialog
-                    student={reviewing}
-                    onClose={() => setReviewing(null)}
-                />
-            )}
         </>
     );
 }

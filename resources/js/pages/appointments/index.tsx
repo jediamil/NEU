@@ -1,4 +1,4 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     Check,
@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { index, status as updateStatus } from '@/routes/appointments';
+import { index as scheduledStudents } from '@/routes/scheduled-students';
 import type { Appointment, AppointmentSlot, Paginated } from '@/types/clinic';
 
 type Props = {
@@ -52,6 +53,7 @@ type Props = {
     students: { id: number; name: string; student_number: string }[];
     slots: AppointmentSlot[];
     services: Record<string, string>;
+    filter_services: Record<string, string>;
     counts: {
         all: number;
         scheduled: number;
@@ -65,6 +67,7 @@ export default function Appointments({
     students,
     slots,
     services,
+    filter_services,
     counts,
 }: Props) {
     const page = usePage();
@@ -125,6 +128,11 @@ export default function Appointments({
                     title="Appointments"
                     description="An organized day starts with a well-planned visit. Manage every booking in one place."
                 >
+                    <Button asChild variant="outline">
+                        <Link href={scheduledStudents()}>
+                            Scheduled students
+                        </Link>
+                    </Button>
                     <Button variant="outline" onClick={() => setVerify(true)}>
                         <Ticket className="size-4" />
                         Verify appointment
@@ -202,11 +210,13 @@ export default function Appointments({
                             className="field-input w-auto"
                         >
                             <option value="">All transactions</option>
-                            {Object.entries(services).map(([value, label]) => (
-                                <option key={value} value={value}>
-                                    {label}
-                                </option>
-                            ))}
+                            {Object.entries(filter_services).map(
+                                ([value, label]) => (
+                                    <option key={value} value={value}>
+                                        {label}
+                                    </option>
+                                ),
+                            )}
                         </select>
                     </SearchFilters>
                     <AppointmentTable

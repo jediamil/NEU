@@ -10,6 +10,7 @@ use App\Models\AppointmentSlot;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,7 +21,7 @@ class AppointmentController extends Controller
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'], 'date' => ['nullable', 'date_format:Y-m-d'],
             'status' => ['nullable', 'in:scheduled,checked_in,completed,cancelled,no_show'],
-            'service' => ['nullable', 'in:physical_exam,document_submission,xray_verification'],
+            'service' => ['nullable', Rule::in(array_keys(Appointment::SERVICES + Appointment::LEGACY_SERVICES))],
         ]);
 
         $appointments = Appointment::query()->with(['student', 'slot'])
@@ -32,25 +33,22 @@ class AppointmentController extends Controller
 
         $slots = AppointmentSlot::query()->with(['schedule.slots' => fn ($query) => $query->withCount(['appointments as reserved_count' => fn ($query) => $query->where('status', '!=', 'cancelled')])])
             ->withCount(['appointments as reserved_count' => fn ($query) => $query->where('status', '!=', 'cancelled')])
-            ->where('starts_at', '>', now())->where('starts_at', '<=', now()->addDays(45))
+            ->whereNotNull('period')->where('starts_at', '>', now())->where('starts_at', '<=', now()->addDays(45))
             ->whereHas('schedule', fn ($query) => $query->where('is_open', true))->orderBy('starts_at')->get()
             ->map(fn (AppointmentSlot $slot) => [
                 'id' => $slot->id, 'date' => $slot->starts_at->toDateString(),
-                'label' => $slot->starts_at->format('g:i A').' – '.$slot->ends_at->format('g:i A'),
-                'capacity' => $slot->capacity, 'reserved' => $slot->reserved_count,
-                'remaining' => max(0, min($slot->capacity - $slot->reserved_count, $slot->schedule->daily_capacity - $slot->schedule->slots->sum('reserved_count'))),
+                'label' => AppointmentSlot::PERIODS[$slot->bookingPeriod()], 'period' => $slot->period,
+                'capacity' => $slot->capacity, 'reserved' => $slot->schedule->reservedForPeriod($slot->bookingPeriod()),
+                'period_remaining' => $slot->capacity - $slot->schedule->reservedForPeriod($slot->bookingPeriod()),
+                'daily_remaining' => $slot->schedule->daily_capacity - $slot->schedule->slots->sum('reserved_count'),
+                'remaining' => max(0, min($slot->capacity - $slot->schedule->reservedForPeriod($slot->bookingPeriod()), $slot->schedule->daily_capacity - $slot->schedule->slots->sum('reserved_count'))),
             ]);
 
         return Inertia::render('appointments/index', [
             'appointments' => $appointments, 'filters' => $filters,
             'students' => Student::query()->orderBy('name')->get(['id', 'name', 'student_number']),
-            'slots' => $slots, 'services' => Appointment::SERVICES,
-            'counts' => [
-                'all' => Appointment::query()->count(),
-                'scheduled' => Appointment::query()->where('status', 'scheduled')->count(),
-                'checked_in' => Appointment::query()->where('status', 'checked_in')->count(),
-                'completed' => Appointment::query()->where('status', 'completed')->count(),
-            ],
+            'slots' => $slots, 'services' => Appointment::SERVICES, 'filter_services' => Appointment::SERVICES + Appointment::LEGACY_SERVICES,
+            'counts' => collect(Appointment::statusCounts())->except('reserved')->all(),
         ]);
     }
 

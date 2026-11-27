@@ -6,6 +6,7 @@ use Carbon\CarbonImmutable;
 use Database\Factories\ClinicScheduleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,8 +20,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $slot_capacity
  * @property int $daily_capacity
  * @property bool $is_open
+ * @property int $morning_capacity
+ * @property int $afternoon_capacity
+ * @property-read Collection<int, AppointmentSlot> $slots
  */
-#[Fillable(['date', 'opening_time', 'closing_time', 'slot_minutes', 'slot_capacity', 'daily_capacity', 'is_open'])]
+#[Fillable(['date', 'opening_time', 'closing_time', 'slot_minutes', 'slot_capacity', 'daily_capacity', 'is_open', 'morning_capacity', 'afternoon_capacity'])]
 class ClinicSchedule extends Model
 {
     /** @use HasFactory<ClinicScheduleFactory> */
@@ -49,21 +53,18 @@ class ClinicSchedule extends Model
 
     public function generateSlots(): void
     {
-        $start = CarbonImmutable::parse($this->date->format('Y-m-d').' '.$this->opening_time);
-        $close = CarbonImmutable::parse($this->date->format('Y-m-d').' '.$this->closing_time);
-
-        for ($time = $start; $time->addMinutes($this->slot_minutes)->lte($close); $time = $time->addMinutes($this->slot_minutes)) {
-            if ($time->hour < 13 && $time->addMinutes($this->slot_minutes)->hour >= 12 && $time->addMinutes($this->slot_minutes)->format('H:i') > '12:00') {
-                continue;
-            }
-            if ($time->hour === 12) {
-                continue;
-            }
-
-            $this->slots()->firstOrCreate(
-                ['starts_at' => $time],
-                ['ends_at' => $time->addMinutes($this->slot_minutes), 'capacity' => $this->slot_capacity],
+        foreach (['morning', 'afternoon'] as $period) {
+            $this->slots()->updateOrCreate(
+                ['period' => $period],
+                ['starts_at' => $this->date->setTime($period === 'morning' ? 8 : 13, 0),
+                    'ends_at' => $this->date->setTime($period === 'morning' ? 12 : 16, 0),
+                    'capacity' => $period === 'morning' ? $this->morning_capacity : $this->afternoon_capacity],
             );
         }
+    }
+
+    public function reservedForPeriod(string $period): int
+    {
+        return (int) $this->slots->filter(fn (AppointmentSlot $slot) => $slot->bookingPeriod() === $period)->sum('reserved_count');
     }
 }

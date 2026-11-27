@@ -97,6 +97,13 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'pooled' => env('DB_POOLED', false),
+            'options' => [PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', false)],
+            'direct' => array_filter([
+                'host' => env('DB_DIRECT_HOST'),
+                'sslmode' => env('DB_SSLMODE'),
+                'options' => [PDO::ATTR_PERSISTENT => false],
+            ]),
         ],
 
         'sqlsrv' => [

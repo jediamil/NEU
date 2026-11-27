@@ -1,0 +1,20 @@
+build:
+    name: NEU Health Student — shared clinic database
+    steps:
+        - eas/checkout
+        - eas/install_node_modules
+        - run:
+              name: Generate the iPhone project and install native dependencies
+              command: |
+                  set -euo pipefail
+                  npx expo prebuild --platform ios --no-install
+                  cd ios
+                  pod install
+        - run:
+              name: Compile an offline Release app and package the sideload IPA
+              command: bash scripts/package-ios.sh
+        - eas/upload_artifact:
+              name: Upload the iPhone IPA
+              inputs:
+                  type: application-archive
+                  path: artifacts/NEU-Health-Student-Production.ipa

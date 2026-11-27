@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ClinicScheduleRequest;
 use App\Models\Appointment;
+use App\Models\AppointmentSlot;
 use App\Models\ClinicSchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +20,8 @@ class ClinicScheduleController extends Controller
     {
         $request->validate(['week' => ['nullable', 'date_format:Y-m-d']]);
         $start = CarbonImmutable::parse($request->string('week')->toString() ?: now()->toDateString())->startOfWeek();
-        $schedules = ClinicSchedule::query()->with(['slots' => fn ($query) => $query->withCount(['appointments as reserved_count' => fn ($query) => $query->where('status', '!=', 'cancelled')])->orderBy('starts_at')])->whereBetween('date', [$start->toDateString(), $start->addDays(6)->toDateString()])->get()->keyBy(fn (ClinicSchedule $day) => $day->date->toDateString());
+        $schedules = ClinicSchedule::query()->with(['slots' => fn ($query) => $query->withCount(['appointments as reserved_count' => fn ($query) => $query->where('status', '!=', 'cancelled')])->orderBy('starts_at')])
+            ->whereBetween('date', [$start->toDateString(), $start->addDays(6)->toDateString()])->get()->keyBy(fn (ClinicSchedule $day) => $day->date->toDateString());
 
         $days = collect(range(0, 6))->map(function (int $offset) use ($start, $schedules): array {
             $date = $start->addDays($offset);
@@ -28,13 +30,12 @@ class ClinicScheduleController extends Controller
             return [
                 'id' => $day?->id, 'date' => $date->toDateString(), 'day' => $date->format('D'),
                 'number' => $date->format('d'), 'is_today' => $date->isToday(), 'is_past' => $date->endOfDay()->isPast(),
-                'is_open' => $day->is_open ?? false, 'opening_time' => $day->opening_time ?? '08:00',
-                'closing_time' => $day->closing_time ?? '17:00', 'slot_minutes' => $day->slot_minutes ?? 30,
-                'slot_capacity' => $day->slot_capacity ?? 3, 'daily_capacity' => $day->daily_capacity ?? 48,
+                'is_open' => $day->is_open ?? false, 'morning_capacity' => $day->morning_capacity ?? 24,
+                'afternoon_capacity' => $day->afternoon_capacity ?? 24, 'daily_capacity' => $day->daily_capacity ?? 48,
                 'booked' => $day?->slots->sum('reserved_count') ?? 0,
-                'slots' => $day?->slots->map(fn ($slot) => [
-                    'id' => $slot->id, 'label' => $slot->starts_at->format('g:i A'),
-                    'capacity' => $slot->capacity, 'reserved' => $slot->reserved_count,
+                'slots' => $day?->slots->whereNotNull('period')->map(fn (AppointmentSlot $slot) => [
+                    'id' => $slot->id, 'label' => AppointmentSlot::PERIODS[$slot->bookingPeriod()],
+                    'capacity' => $slot->capacity, 'reserved' => $day->reservedForPeriod($slot->bookingPeriod()),
                 ])->values() ?? [],
             ];
         });
@@ -45,11 +46,8 @@ class ClinicScheduleController extends Controller
     public function store(ClinicScheduleRequest $request): RedirectResponse
     {
         DB::transaction(function () use ($request): void {
-            $schedule = ClinicSchedule::query()->create($request->validated());
+            $schedule = ClinicSchedule::query()->create([...$request->validated(), 'opening_time' => '08:00', 'closing_time' => '16:00']);
             $schedule->generateSlots();
-            if ($schedule->slots()->count() === 0) {
-                throw ValidationException::withMessages(['closing_time' => 'These hours do not contain an appointment slot. Adjust the hours or slot length.']);
-            }
         });
 
         return back()->with('success', 'Clinic schedule has been created.');
@@ -59,36 +57,21 @@ class ClinicScheduleController extends Controller
     {
         DB::transaction(function () use ($request, $schedule): void {
             $schedule = ClinicSchedule::query()->lockForUpdate()->findOrFail($schedule->id);
-            $reservations = Appointment::query()->where('status', '!=', 'cancelled')->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id));
-            $booked = $reservations->count();
             $data = $request->validated();
-            $structureChanged = $schedule->date->toDateString() !== $data['date'] || $schedule->opening_time !== $data['opening_time'] || $schedule->closing_time !== $data['closing_time'] || $schedule->slot_minutes !== (int) $data['slot_minutes'];
-
-            if ((int) $data['daily_capacity'] < $booked) {
+            if ($schedule->date->toDateString() !== $data['date']) {
+                throw ValidationException::withMessages(['date' => 'Create a separate clinic day to use a different date.']);
+            }
+            $reservations = Appointment::query()->where('status', '!=', 'cancelled')->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id));
+            if ((int) $data['daily_capacity'] < (clone $reservations)->count()) {
                 throw ValidationException::withMessages(['daily_capacity' => 'Daily capacity cannot be lower than existing reservations.']);
             }
-
-            $hasHistory = Appointment::query()->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id))->exists();
-            if ($structureChanged && $hasHistory) {
-                throw ValidationException::withMessages(['opening_time' => 'Hours, date, and slot length are fixed once a day has appointment history. Capacity and open status can still be changed.']);
-            }
-
-            $schedule->slots()->each(function ($slot) use ($data): void {
-                if ($slot->appointments()->where('status', '!=', 'cancelled')->count() > (int) $data['slot_capacity']) {
-                    throw ValidationException::withMessages(['slot_capacity' => 'Slot capacity cannot be lower than an existing slot’s reservations.']);
+            foreach (['morning', 'afternoon'] as $period) {
+                if ((int) $data[$period.'_capacity'] < (clone $reservations)->whereHas('slot', fn ($query) => $query->inPeriod($period))->count()) {
+                    throw ValidationException::withMessages([$period.'_capacity' => ucfirst($period).' capacity cannot be lower than existing reservations.']);
                 }
-            });
-
+            }
             $schedule->update($data);
-            if ($structureChanged) {
-                $schedule->slots()->delete();
-                $schedule->generateSlots();
-                if ($schedule->slots()->count() === 0) {
-                    throw ValidationException::withMessages(['closing_time' => 'These hours do not contain an appointment slot.']);
-                }
-            } else {
-                $schedule->slots()->update(['capacity' => $schedule->slot_capacity]);
-            }
+            $schedule->generateSlots();
         }, attempts: 3);
 
         return back()->with('success', 'Clinic schedule has been updated.');

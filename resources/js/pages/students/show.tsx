@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AppointmentTable } from '@/components/appointment-table';
+import { ClearanceHistory } from '@/components/clearance-history';
 import {
     PageHeading,
     SectionHeading,
@@ -19,16 +20,20 @@ import {
 } from '@/components/clinic-ui';
 import { StudentDialog } from '@/components/student-dialog';
 import { Button } from '@/components/ui/button';
-import { index as clearances } from '@/routes/clearances';
+import { show as clearanceShow } from '@/routes/clearances';
 import { index } from '@/routes/students';
-import type { Appointment, Student } from '@/types/clinic';
+import type { Appointment, ClearanceRecord, Student } from '@/types/clinic';
 
 export default function StudentProfile({
     student,
     appointments,
+    clearance_history,
+    active_school_year,
 }: {
     student: Student;
     appointments: Appointment[];
+    clearance_history: ClearanceRecord[];
+    active_school_year: string;
 }) {
     const [editing, setEditing] = useState(false);
     return (
@@ -87,7 +92,11 @@ export default function StudentProfile({
                             </div>
                         </section>
                         <section className="panel">
-                            <SectionHeading title="Medical clearance">
+                            <SectionHeading
+                                title={
+                                    'Medical clearance · ' + active_school_year
+                                }
+                            >
                                 <ShieldCheck className="size-4 text-primary" />
                             </SectionHeading>
                             <div className="space-y-4 px-5 pb-5">
@@ -131,13 +140,7 @@ export default function StudentProfile({
                                     className="w-full"
                                     variant="outline"
                                 >
-                                    <Link
-                                        href={clearances({
-                                            query: {
-                                                search: student.student_number,
-                                            },
-                                        })}
-                                    >
+                                    <Link href={clearanceShow(student.id)}>
                                         Review clearance
                                         <ArrowRight className="size-3.5" />
                                     </Link>
@@ -153,6 +156,10 @@ export default function StudentProfile({
                         <AppointmentTable appointments={appointments} />
                     </section>
                 </div>
+                <ClearanceHistory
+                    studentId={student.id}
+                    records={clearance_history}
+                />
             </div>
             {editing && (
                 <StudentDialog

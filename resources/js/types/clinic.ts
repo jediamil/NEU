@@ -1,11 +1,34 @@
 export type ClearanceRecord = {
     id?: number;
+    school_year: string;
+    student_snapshot?: Pick<
+        Student,
+        'name' | 'student_number' | 'program' | 'year_level'
+    > | null;
+    exam_data?: ExamData | null;
+    reviewer?: { id: number; name: string } | null;
     status: string;
     physical_exam?: boolean;
     documents_received?: boolean;
     xray_verified?: boolean;
     notes?: string | null;
     reviewed_at?: string | null;
+};
+export type BookingPeriod = 'morning' | 'afternoon';
+export type ExamData = {
+    height_cm?: number | string | null;
+    weight_kg?: number | string | null;
+    bp_systolic?: number | string | null;
+    bp_diastolic?: number | string | null;
+    temperature_c?: number | string | null;
+    eye_left?: string | null;
+    eye_right?: string | null;
+    last_menstrual_period?: string | null;
+    has_cough?: boolean | null;
+    has_colds?: boolean | null;
+    has_allergies?: boolean | null;
+    allergy_details?: string | null;
+    physician_notes?: string | null;
 };
 export type Student = {
     id: number;
@@ -25,6 +48,8 @@ export type Appointment = {
     notes: string | null;
     student: Student;
     slot_id: number;
+    period: BookingPeriod;
+    legacy_time: boolean;
     starts_at: string;
     ends_at: string;
 };
@@ -35,6 +60,9 @@ export type AppointmentSlot = {
     capacity: number;
     reserved: number;
     remaining: number;
+    period_remaining?: number;
+    daily_remaining?: number;
+    period: BookingPeriod | null;
 };
 export type Announcement = {
     id: number;
@@ -62,10 +90,8 @@ export type ClinicDay = {
     is_today: boolean;
     is_past: boolean;
     is_open: boolean;
-    opening_time: string;
-    closing_time: string;
-    slot_minutes: number;
-    slot_capacity: number;
+    morning_capacity: number;
+    afternoon_capacity: number;
     daily_capacity: number;
     booked: number;
     slots: { id: number; label: string; capacity: number; reserved: number }[];

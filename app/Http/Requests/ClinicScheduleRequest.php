@@ -20,10 +20,8 @@ class ClinicScheduleRequest extends FormRequest
 
         return [
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', Rule::unique('clinic_schedules')->ignore($schedule instanceof ClinicSchedule ? $schedule->id : null)],
-            'opening_time' => ['required', 'date_format:H:i'],
-            'closing_time' => ['required', 'date_format:H:i', 'after:opening_time'],
-            'slot_minutes' => ['required', 'integer', Rule::in([15, 30, 60])],
-            'slot_capacity' => ['required', 'integer', 'between:1,100'],
+            'morning_capacity' => ['required', 'integer', 'between:0,1000'],
+            'afternoon_capacity' => ['required', 'integer', 'between:0,1000'],
             'daily_capacity' => ['required', 'integer', 'between:1,1000'],
             'is_open' => ['required', 'boolean'],
         ];

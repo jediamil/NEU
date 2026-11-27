@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'neon' => [
+        'function_url' => env('NEON_FUNCTION_URL'),
+        'realtime_url' => env('NEON_REALTIME_URL'),
+        'portal_secret' => env('NEU_PORTAL_REALTIME_SECRET'),
+    ],
 
     /*
     |--------------------------------------------------------------------------
