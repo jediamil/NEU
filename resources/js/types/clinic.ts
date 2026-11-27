@@ -36,13 +36,17 @@ export type Student = {
     name: string;
     email?: string | null;
     program: string;
+    college?: string | null;
     year_level: number;
+    age?: number | null;
+    section?: string | null;
     clearance?: ClearanceRecord | null;
 };
 export type Appointment = {
     id: number;
     reference: string;
     service: string;
+    services: string[];
     service_label: string;
     status: string;
     notes: string | null;
@@ -69,6 +73,7 @@ export type Announcement = {
     title: string;
     body: string;
     audience: string;
+    image_url?: string | null;
     published_at: string | null;
     created_at?: string;
 };
@@ -94,5 +99,12 @@ export type ClinicDay = {
     afternoon_capacity: number;
     daily_capacity: number;
     booked: number;
-    slots: { id: number; label: string; capacity: number; reserved: number }[];
+    booking_cutoff: string;
+    slots: {
+        id: number;
+        label: string;
+        capacity: number;
+        reserved: number;
+        booking_closes_at: string;
+    }[];
 };

@@ -17,7 +17,6 @@ import { toast } from 'sonner';
 import { AppointmentDialog } from '@/components/appointment-dialog';
 import { AppointmentTable } from '@/components/appointment-table';
 import {
-    dateLabel,
     Field,
     PageHeading,
     Pagination,
@@ -124,9 +123,8 @@ export default function Appointments({
             <Head title="Appointments" />
             <div className="clinic-page">
                 <PageHeading
-                    eyebrow="CLINIC OPERATIONS"
                     title="Appointments"
-                    description="An organized day starts with a well-planned visit. Manage every booking in one place."
+                    description="Book visits, verify booking references, and check in students."
                 >
                     <Button asChild variant="outline">
                         <Link href={scheduledStudents()}>
@@ -206,7 +204,7 @@ export default function Appointments({
                         <select
                             name="service"
                             defaultValue={filters.service ?? ''}
-                            aria-label="Transaction type"
+                            aria-label="Service"
                             className="field-input w-auto"
                         >
                             <option value="">All transactions</option>
@@ -284,7 +282,7 @@ export default function Appointments({
                                                         openBooking(appointment)
                                                     }
                                                 >
-                                                    Reschedule visit
+                                                    Edit appointment
                                                 </DropdownMenuItem>
                                                 {new Date(appointment.ends_at) <
                                                     new Date() && (
@@ -396,7 +394,7 @@ export default function Appointments({
                                     <StatusBadge status={details.status} />
                                 </div>
                             </div>
-                            <dl className="grid grid-cols-2 gap-5 text-sm">
+                            <dl className="grid gap-5 text-sm sm:grid-cols-2">
                                 <div>
                                     <dt className="text-xs text-muted-foreground">
                                         Student
@@ -406,6 +404,23 @@ export default function Appointments({
                                     </dd>
                                     <dd className="mt-1 text-xs text-muted-foreground">
                                         {details.student.student_number}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                        Course
+                                    </dt>
+                                    <dd className="mt-1">
+                                        {details.student.program}
+                                    </dd>
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <dt className="text-xs text-muted-foreground">
+                                        College
+                                    </dt>
+                                    <dd className="mt-1">
+                                        {details.student.college ||
+                                            'Not recorded'}
                                     </dd>
                                 </div>
                                 <div>
@@ -421,7 +436,11 @@ export default function Appointments({
                                         Date
                                     </dt>
                                     <dd className="mt-1">
-                                        {dateLabel(details.starts_at)}
+                                        {new Intl.DateTimeFormat('en-PH', {
+                                            month: 'long',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        }).format(new Date(details.starts_at))}
                                     </dd>
                                 </div>
                                 <div>
@@ -429,7 +448,7 @@ export default function Appointments({
                                         Time
                                     </dt>
                                     <dd className="mt-1">
-                                        {timeLabel(details.starts_at)}–
+                                        {timeLabel(details.starts_at)} to{' '}
                                         {timeLabel(details.ends_at)}
                                     </dd>
                                 </div>

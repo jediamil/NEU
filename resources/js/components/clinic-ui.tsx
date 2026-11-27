@@ -8,7 +8,6 @@ import {
     Circle,
     Clock3,
     Search,
-    SlidersHorizontal,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -32,22 +31,26 @@ export function PageHeading({
     children?: ReactNode;
 }) {
     return (
-        <div className="flex flex-wrap items-end justify-between gap-5">
+        <header className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-5 py-5 shadow-sm sm:px-7 sm:py-6">
             <div>
                 {eyebrow && (
-                    <p className="mb-2 text-[10px] font-semibold tracking-[0.18em] text-primary uppercase">
+                    <p className="mb-2 text-xs font-semibold tracking-wide text-primary uppercase">
                         {eyebrow}
                     </p>
                 )}
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[29px]">
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                     {title}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                     {description}
                 </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">{children}</div>
-        </div>
+            {children && (
+                <div className="flex flex-wrap items-center gap-2">
+                    {children}
+                </div>
+            )}
+        </header>
     );
 }
 export function StatCard({
@@ -72,7 +75,7 @@ export function StatCard({
     return (
         <div className="panel p-5">
             <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-muted-foreground">
+                <span className="text-sm font-medium text-muted-foreground">
                     {label}
                 </span>
                 <span
@@ -87,7 +90,7 @@ export function StatCard({
             <p className="mt-2 text-[31px] leading-tight font-semibold tracking-tight tabular-nums">
                 {value.toLocaleString()}
             </p>
-            <p className="mt-2 text-[11px] text-muted-foreground">{caption}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{caption}</p>
         </div>
     );
 }
@@ -111,7 +114,7 @@ export function StatusBadge({ status }: { status: string }) {
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium whitespace-nowrap',
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap',
                 green
                     ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                     : blue
@@ -129,9 +132,11 @@ export function StatusBadge({ status }: { status: string }) {
 export function StudentAvatar({
     name,
     index = 0,
+    className,
 }: {
     name: string;
     index?: number;
+    className?: string;
 }) {
     const colors = [
         'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
@@ -141,9 +146,11 @@ export function StudentAvatar({
     ];
     return (
         <span
+            aria-hidden="true"
             className={cn(
                 'flex size-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
                 colors[index % colors.length],
+                className,
             )}
         >
             {name
@@ -179,6 +186,8 @@ export function EmptyState({
     );
 }
 export function Pagination({ data }: { data: Paginated<unknown> }) {
+    if (data.total === 0) return null;
+
     return (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
             <p className="text-xs text-muted-foreground">
@@ -210,7 +219,7 @@ export function Pagination({ data }: { data: Paginated<unknown> }) {
                     </Button>
                 )}
                 <span className="text-xs text-muted-foreground">
-                    {data.current_page} / {data.last_page}
+                    Page {data.current_page} of {data.last_page}
                 </span>
                 {data.next_page_url ? (
                     <Button asChild variant="outline" size="icon">
@@ -248,6 +257,10 @@ export function SearchFilters({
     children?: ReactNode;
 }) {
     const [search, setSearch] = useState(filters.search ?? '');
+    const [processing, setProcessing] = useState<'search' | 'clear' | null>(
+        null,
+    );
+
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
@@ -259,14 +272,19 @@ export function SearchFilters({
             preserveScroll: true,
             preserveState: true,
             replace: true,
+            onStart: () => setProcessing('search'),
+            onFinish: () => setProcessing(null),
         });
     }
     return (
         <form
             onSubmit={submit}
+            role="search"
+            aria-label="Search and filter records"
+            aria-busy={processing !== null}
             className="flex flex-wrap items-center gap-3 border-b border-border p-4"
         >
-            <div className="relative min-w-48 flex-1">
+            <div className="relative w-full sm:min-w-48 sm:flex-1">
                 <Search className="pointer-events-none absolute top-3 left-3 size-4 text-muted-foreground" />
                 <Input
                     name="search"
@@ -278,20 +296,33 @@ export function SearchFilters({
                 />
             </div>
             {children}
-            <Button type="submit" variant="outline" className="h-10">
-                <SlidersHorizontal className="size-3.5" />
-                Apply
+            <Button
+                type="submit"
+                variant="secondary"
+                className="h-10"
+                disabled={processing !== null}
+            >
+                {processing === 'search' ? 'Searching…' : 'Search'}
             </Button>
             {Object.values(filters).some(Boolean) && (
                 <Button
                     type="button"
                     variant="ghost"
+                    disabled={processing !== null}
                     onClick={() => {
                         setSearch('');
-                        router.get(url, {}, { preserveScroll: true });
+                        router.get(
+                            url,
+                            {},
+                            {
+                                preserveScroll: true,
+                                onStart: () => setProcessing('clear'),
+                                onFinish: () => setProcessing(null),
+                            },
+                        );
                     }}
                 >
-                    Reset
+                    {processing === 'clear' ? 'Clearing…' : 'Clear filters'}
                 </Button>
             )}
         </form>
@@ -310,7 +341,7 @@ export function Field({
 }) {
     return (
         <div className="grid gap-2">
-            <Label htmlFor={htmlFor} className="text-xs font-medium">
+            <Label htmlFor={htmlFor} className="text-sm font-medium">
                 {label}
             </Label>
             {children}
@@ -330,7 +361,7 @@ export function SectionHeading({
     return (
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-5">
             <div>
-                <h2 className="text-sm font-semibold">{title}</h2>
+                <h2 className="text-base font-semibold">{title}</h2>
                 {description && (
                     <p className="mt-1 text-[11px] text-muted-foreground">
                         {description}

@@ -4,7 +4,17 @@
         "appVersionSource": "local"
     },
     "build": {
+        "preview": {
+            "extends": "sideload",
+            "channel": "preview",
+            "environment": "preview",
+            "android": {
+                "buildType": "apk"
+            }
+        },
         "sideload": {
+            "channel": "preview",
+            "environment": "preview",
             "distribution": "internal",
             "developmentClient": false,
             "node": "24.21.0",

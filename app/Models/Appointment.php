@@ -17,6 +17,7 @@ use Illuminate\Support\Str;
  * @property int $appointment_slot_id
  * @property string $reference
  * @property string $service
+ * @property list<string>|null $services
  * @property string $status
  * @property string|null $notes
  * @property CarbonImmutable|null $checked_in_at
@@ -24,7 +25,7 @@ use Illuminate\Support\Str;
  * @property-read Student $student
  * @property-read AppointmentSlot $slot
  */
-#[Fillable(['student_id', 'appointment_slot_id', 'created_by', 'reference', 'service', 'status', 'notes', 'checked_in_at', 'completed_at'])]
+#[Fillable(['student_id', 'appointment_slot_id', 'created_by', 'reference', 'service', 'services', 'status', 'notes', 'checked_in_at', 'completed_at'])]
 class Appointment extends Model
 {
     /** @use HasFactory<AppointmentFactory> */
@@ -37,7 +38,7 @@ class Appointment extends Model
         });
     }
 
-    public const array SERVICES = ['physical_exam' => 'Physical examination', 'xray_verification' => 'X-ray (school-year clearance)', 'dental_consultation' => 'Dental consultation', 'tooth_extraction' => 'Tooth extraction'];
+    public const array SERVICES = ['physical_exam' => 'Physical examination', 'xray_verification' => 'X-ray (school-year clearance)', 'dental_consultation' => 'Dental consultation', 'tooth_extraction' => 'Tooth extraction', 'medical_clearance_submission' => 'Medical clearance submission'];
 
     public const array LEGACY_SERVICES = ['document_submission' => 'Document submission'];
 
@@ -63,7 +64,7 @@ class Appointment extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['checked_in_at' => 'immutable_datetime', 'completed_at' => 'immutable_datetime'];
+        return ['services' => 'array', 'checked_in_at' => 'immutable_datetime', 'completed_at' => 'immutable_datetime'];
     }
 
     /** @return BelongsTo<Student, $this> */
@@ -81,11 +82,15 @@ class Appointment extends Model
     /** @return array<string, mixed> */
     public function summary(): array
     {
+        $services = $this->services ?? [$this->service];
+        $labels = self::SERVICES + self::LEGACY_SERVICES;
+
         return [
             'id' => $this->id, 'reference' => $this->reference,
-            'service' => $this->service, 'service_label' => (self::SERVICES + self::LEGACY_SERVICES)[$this->service] ?? $this->service,
+            'service' => $services[0], 'services' => $services,
+            'service_label' => implode(', ', array_map(fn (string $service) => $labels[$service] ?? $service, $services)),
             'status' => $this->status, 'notes' => $this->notes,
-            'student' => $this->student->only(['id', 'name', 'student_number', 'program', 'year_level']),
+            'student' => $this->student->only(['id', 'name', 'student_number', 'program', 'college', 'year_level']),
             'slot_id' => $this->appointment_slot_id,
             'period' => $this->slot->bookingPeriod(), 'legacy_time' => $this->slot->period === null,
             'starts_at' => $this->slot->starts_at->format('Y-m-d\TH:i:s'),

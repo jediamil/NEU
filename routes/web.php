@@ -32,6 +32,8 @@ Route::middleware(['auth', 'verified', 'can:access-portal'])->group(function ():
         Route::get('announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
         Route::post('announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
         Route::patch('announcements/{announcement}', [AnnouncementController::class, 'update'])->name('announcements.update');
+        Route::get('announcements/{announcement}/image', [AnnouncementController::class, 'image'])->name('announcements.image');
+        Route::delete('announcements/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
     });
 });
 

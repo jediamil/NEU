@@ -23,6 +23,7 @@ class ClinicScheduleRequest extends FormRequest
             'morning_capacity' => ['required', 'integer', 'between:0,1000'],
             'afternoon_capacity' => ['required', 'integer', 'between:0,1000'],
             'daily_capacity' => ['required', 'integer', 'between:1,1000'],
+            'booking_cutoff' => ['sometimes', 'required', 'date_format:H:i', 'after_or_equal:08:00', 'before_or_equal:16:00'],
             'is_open' => ['required', 'boolean'],
         ];
     }

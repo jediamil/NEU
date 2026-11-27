@@ -20,56 +20,64 @@ class ManageAppointment
             $schedule = ClinicSchedule::query()->lockForUpdate()->findOrFail($slot->clinic_schedule_id);
             $slot = AppointmentSlot::query()->lockForUpdate()->findOrFail($slot->id);
 
-            $keepingLegacyTime = $appointment !== null && $appointment->appointment_slot_id === $slot->id && $appointment->student_id === (int) $data['student_id'];
-            if ($slot->period === null && ! $keepingLegacyTime) {
+            $services = $data['services'] ?? [$data['service']];
+            $details = [
+                'service' => $services[0] === 'medical_clearance_submission' ? 'document_submission' : $services[0],
+                'services' => $services,
+                'notes' => $data['notes'] ?? null,
+            ];
+
+            if ($appointment !== null) {
+                $current = Appointment::query()->lockForUpdate()->findOrFail($appointment->id);
+                if ($current->status !== 'scheduled') {
+                    throw ValidationException::withMessages(['appointment_slot_id' => 'Only scheduled appointments can be edited.']);
+                }
+                if ($current->appointment_slot_id !== $slot->id || $current->student_id !== (int) $data['student_id']) {
+                    throw ValidationException::withMessages(['appointment_slot_id' => 'Cancel the existing appointment before booking a different time or student.']);
+                }
+
+                $current->update($details);
+
+                return $current;
+            }
+
+            if ($slot->period === null) {
                 throw ValidationException::withMessages(['appointment_slot_id' => 'Choose a Morning or Afternoon booking period.']);
             }
 
-            if (! $schedule->is_open || $slot->starts_at->lte(now())) {
-                throw ValidationException::withMessages(['appointment_slot_id' => 'Choose a future appointment slot on an open clinic day.']);
+            if (! $schedule->is_open || $schedule->bookingClosesAt($slot)->lte(now())) {
+                throw ValidationException::withMessages(['appointment_slot_id' => 'Choose a period that is still accepting bookings on an open clinic day.']);
             }
 
-            if ($appointment !== null && $appointment->fresh()?->status !== 'scheduled') {
-                throw ValidationException::withMessages(['appointment_slot_id' => 'Only scheduled appointments can be rescheduled.']);
+            $reservations = Appointment::query()->where('status', '!=', 'cancelled');
+            $dayReservations = (clone $reservations)->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id));
+            $periodReservations = (clone $reservations)->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id)->inPeriod($slot->bookingPeriod()));
+            $studentReservations = (clone $dayReservations)->where('student_id', $data['student_id']);
+            if ((clone $periodReservations)->where('student_id', $data['student_id'])->exists()) {
+                throw ValidationException::withMessages(['student_id' => 'This student already has an appointment in this booking period.']);
             }
-
-            $reservations = Appointment::query()->where('status', '!=', 'cancelled')->when($appointment !== null, fn ($query) => $query->whereKeyNot($appointment->id));
+            if ($studentReservations->exists()) {
+                throw ValidationException::withMessages(['student_id' => 'This student already has an appointment on this date. Cancel it before booking a different period.']);
+            }
 
             if ((clone $reservations)->where('appointment_slot_id', $slot->id)->count() >= $slot->capacity) {
                 throw ValidationException::withMessages(['appointment_slot_id' => 'This time slot is fully booked. Please choose another time.']);
             }
 
-            if ((clone $reservations)->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id))->count() >= $schedule->daily_capacity) {
+            if ($dayReservations->count() >= $schedule->daily_capacity) {
                 throw ValidationException::withMessages(['appointment_slot_id' => 'The clinic has reached its daily appointment capacity.']);
             }
 
-            $periodReservations = (clone $reservations)->whereHas('slot', fn ($query) => $query->where('clinic_schedule_id', $schedule->id)->inPeriod($slot->bookingPeriod()));
             $periodCapacity = $slot->bookingPeriod() === 'morning' ? $schedule->morning_capacity : $schedule->afternoon_capacity;
             if ((clone $periodReservations)->count() >= $periodCapacity) {
                 throw ValidationException::withMessages(['appointment_slot_id' => 'This booking period is fully booked. Please choose another period.']);
             }
 
-            if (! $keepingLegacyTime && (clone $periodReservations)->where('student_id', $data['student_id'])->exists()) {
-                throw ValidationException::withMessages(['student_id' => 'This student already has an appointment in this booking period.']);
-            }
-
-            if ((clone $reservations)->where('student_id', $data['student_id'])->where('appointment_slot_id', $slot->id)->exists()) {
-                throw ValidationException::withMessages(['student_id' => 'This student already has an appointment in this time slot.']);
-            }
-
-            $values = [
-                'student_id' => $data['student_id'], 'appointment_slot_id' => $slot->id,
-                'service' => $data['service'], 'notes' => $data['notes'] ?? null,
-            ];
-
-            if ($appointment !== null) {
-                $appointment->update($values);
-
-                return $appointment;
-            }
-
             return Appointment::query()->create([
-                ...$values, 'created_by' => $user->id,
+                ...$details,
+                'student_id' => $data['student_id'],
+                'appointment_slot_id' => $slot->id,
+                'created_by' => $user->id,
                 'reference' => 'NEU-'.now()->format('ymd').'-'.Str::upper(Str::random(6)),
                 'status' => 'scheduled',
             ]);

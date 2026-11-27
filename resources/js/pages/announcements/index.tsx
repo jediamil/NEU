@@ -7,6 +7,7 @@ import {
     Megaphone,
     Pencil,
     Plus,
+    Trash2,
     Users,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -31,7 +32,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { index, store, update } from '@/routes/announcements';
+import { destroy, index, store, update } from '@/routes/announcements';
 import type { Announcement, Paginated } from '@/types/clinic';
 
 function AnnouncementDialog({
@@ -46,12 +47,17 @@ function AnnouncementDialog({
         body: announcement?.body ?? '',
         audience: announcement?.audience ?? 'students',
         published: !!announcement?.published_at,
+        image: null as File | null,
     });
     function submit(event: FormEvent) {
         event.preventDefault();
         const options = { preserveScroll: true, onSuccess: onClose };
-        if (announcement) form.patch(update.url(announcement.id), options);
-        else form.post(store.url(), options);
+        if (announcement) {
+            form.transform((data) => ({ ...data, _method: 'PATCH' }));
+            form.post(update.url(announcement.id), options);
+        } else {
+            form.post(store.url(), options);
+        }
     }
     return (
         <Dialog
@@ -105,6 +111,40 @@ function AnnouncementDialog({
                             placeholder="What does your audience need to know?"
                             required
                         />
+                    </Field>
+                    <Field
+                        label="Image (optional)"
+                        htmlFor="notice-image"
+                        error={form.errors.image}
+                    >
+                        {announcement?.image_url && (
+                            <img
+                                src={announcement.image_url}
+                                alt="Current announcement image"
+                                className="max-h-40 w-full rounded-md border bg-muted object-contain"
+                            />
+                        )}
+                        <Input
+                            id="notice-image"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            aria-describedby="notice-image-hint"
+                            disabled={form.processing}
+                            onChange={(event) =>
+                                form.setData(
+                                    'image',
+                                    event.target.files?.[0] ?? null,
+                                )
+                            }
+                        />
+                        <p
+                            id="notice-image-hint"
+                            className="text-xs text-muted-foreground"
+                        >
+                            JPEG, PNG, or WebP, up to 2 MB.{' '}
+                            {announcement?.image_url &&
+                                'Choose a file to replace the current image.'}
+                        </p>
                     </Field>
                     <Field
                         label="Audience"
@@ -174,6 +214,18 @@ export default function Announcements({
     counts: { all: number; published: number; draft: number };
 }) {
     const [editing, setEditing] = useState<Announcement | undefined>();
+    const [deleting, setDeleting] = useState<Announcement | null>(null);
+    const deletion = useForm({});
+
+    function deleteAnnouncement(event: FormEvent) {
+        event.preventDefault();
+        if (!deleting) return;
+
+        deletion.delete(destroy.url(deleting.id), {
+            preserveScroll: true,
+            onSuccess: () => setDeleting(null),
+        });
+    }
     const [open, setOpen] = useState(false);
     const [reading, setReading] = useState<Announcement | null>(null);
     function edit(announcement?: Announcement) {
@@ -185,9 +237,8 @@ export default function Announcements({
             <Head title="Announcements" />
             <div className="clinic-page">
                 <PageHeading
-                    eyebrow="KEEP YOUR CAMPUS INFORMED"
                     title="Clinic announcements"
-                    description="The right information, at the right time. Create and manage updates for your community."
+                    description="Write clinic notices, save drafts, and manage published announcements."
                 >
                     <Button onClick={() => edit()}>
                         <Plus className="size-4" />
@@ -241,6 +292,14 @@ export default function Announcements({
                                             }
                                         />
                                     </div>
+                                    {item.image_url && (
+                                        <img
+                                            src={item.image_url}
+                                            alt=""
+                                            loading="lazy"
+                                            className="mt-4 aspect-video w-full rounded-md border bg-muted object-contain"
+                                        />
+                                    )}
                                     <h2 className="mt-5 text-sm leading-relaxed font-semibold">
                                         {item.title}
                                     </h2>
@@ -267,16 +326,33 @@ export default function Announcements({
                                                 Read announcement
                                                 <ArrowUpRight className="size-3" />
                                             </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => edit(item)}
-                                                aria-label={
-                                                    'Edit ' + item.title
-                                                }
-                                            >
-                                                <Pencil className="size-3.5" />
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => edit(item)}
+                                                    aria-label={
+                                                        'Edit ' + item.title
+                                                    }
+                                                    title="Edit announcement"
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-destructive hover:text-destructive"
+                                                    onClick={() =>
+                                                        setDeleting(item)
+                                                    }
+                                                    aria-label={
+                                                        'Delete ' + item.title
+                                                    }
+                                                    title="Delete announcement"
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 </article>
@@ -299,6 +375,43 @@ export default function Announcements({
                 />
             )}
             <Dialog
+                open={!!deleting}
+                onOpenChange={(open) => {
+                    if (!open && !deletion.processing) setDeleting(null);
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete announcement?</DialogTitle>
+                        <DialogDescription>
+                            “{deleting?.title}” will be permanently deleted from
+                            the clinic announcements.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={deleteAnnouncement}>
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={deletion.processing}
+                                onClick={() => setDeleting(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="destructive"
+                                disabled={deletion.processing}
+                            >
+                                {deletion.processing
+                                    ? 'Deleting…'
+                                    : 'Delete announcement'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+            <Dialog
                 open={!!reading}
                 onOpenChange={(open) => {
                     if (!open) setReading(null);
@@ -316,6 +429,13 @@ export default function Announcements({
                             · {reading?.audience}
                         </DialogDescription>
                     </DialogHeader>
+                    {reading?.image_url && (
+                        <img
+                            src={reading.image_url}
+                            alt="Announcement image"
+                            className="max-h-96 w-full rounded-md border bg-muted object-contain"
+                        />
+                    )}
                     <p className="mt-3 text-sm leading-7 whitespace-pre-wrap text-muted-foreground">
                         {reading?.body}
                     </p>

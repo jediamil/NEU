@@ -67,7 +67,7 @@ test('registrars cannot change a student clearance', function () {
 
 test('clinic staff can create a student and its pending clearance', function () {
     $user = User::factory()->create();
-    $payload = ['student_number' => '2026-98765', 'name' => 'Student Example', 'email' => 'student@example.test', 'program' => 'BS Information Systems', 'year_level' => 2];
+    $payload = ['student_number' => '2026-98765', 'name' => 'Student Example', 'email' => 'student@example.test', 'program' => 'BS Information Systems', 'college' => 'College of Informatics and Computing Studies', 'year_level' => 2];
 
     $this->actingAs($user)->post(route('students.store'), $payload)->assertRedirect()->assertSessionHasNoErrors();
 
@@ -88,15 +88,34 @@ test('duplicate student numbers are rejected without adding records', function (
 
 test('staff can book a future shared appointment slot', function () {
     $user = User::factory()->create();
-    $student = Student::factory()->create();
+    $student = Student::factory()->create(['college' => 'College of Informatics and Computing Studies']);
     $slot = AppointmentSlot::factory()->create();
 
     $this->actingAs($user)->post(route('appointments.store'), [
         'student_id' => $student->id, 'appointment_slot_id' => $slot->id, 'service' => 'physical_exam', 'notes' => 'Bring index card.',
     ])->assertRedirect()->assertSessionHasNoErrors();
 
+    $this->get(route('appointments.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('appointments.data.0.student.program', $student->program)
+        ->where('appointments.data.0.student.college', $student->college));
+
     $this->assertDatabaseHas('appointments', ['student_id' => $student->id, 'appointment_slot_id' => $slot->id, 'status' => 'scheduled', 'notes' => 'Bring index card.']);
     expect(Appointment::query()->firstOrFail()->reference)->toStartWith('NEU-261118-');
+});
+
+test('staff can book the ongoing afternoon period until 4 pm', function () {
+    $schedule = ClinicSchedule::factory()->create(['date' => '2026-11-27', 'is_open' => true]);
+    $slot = AppointmentSlot::factory()->afternoon()->for($schedule, 'schedule')->create();
+    $this->actingAs(User::factory()->create());
+    $this->travelTo(new CarbonImmutable('2026-11-27 13:56:00'));
+    $this->post(route('appointments.store'), [
+        'student_id' => Student::factory()->create()->id, 'appointment_slot_id' => $slot->id, 'service' => 'physical_exam',
+    ])->assertSessionHasNoErrors();
+    $this->travelTo(new CarbonImmutable('2026-11-27 16:00:00'));
+    $this->post(route('appointments.store'), [
+        'student_id' => Student::factory()->create()->id, 'appointment_slot_id' => $slot->id, 'service' => 'physical_exam',
+    ])->assertSessionHasErrors('appointment_slot_id');
+    $this->assertDatabaseCount('appointments', 1);
 });
 
 test('a full slot rejects another transaction type', function () {

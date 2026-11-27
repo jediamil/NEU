@@ -18,12 +18,13 @@ const now = new Date('2026-11-24T01:00:00.000Z');
 test('campus dates use Philippine time at a UTC date boundary', () => {
     assert.equal(campusDate(new Date('2026-11-24T16:30:00Z')), '2026-11-25');
 });
-test('calendar contains only weekdays in the next four weeks', () => {
+test('booking window includes weekends and can be restricted for demo dates', () => {
     const dates = bookingDates(now);
     assert.equal(dates[0], '2026-11-24');
     assert.equal(dates.at(-1), '2026-12-22');
-    assert.equal(dates.includes('2026-11-28'), false);
-    assert.equal(dates.includes('2026-11-29'), false);
+    assert.equal(dates.includes('2026-11-28'), true);
+    assert.equal(dates.includes('2026-11-29'), true);
+    assert.equal(bookingDates(now, false).includes('2026-11-29'), false);
 });
 for (const service of [
     'physical_exam',
@@ -75,21 +76,21 @@ for (const date of ['2026-11-23', '2026-11-28', '2027-01-10', 'not-a-date']) {
         assert.equal(state.visits.length, 2);
     });
 }
-test('a booking period closes exactly at its start time', () => {
-    const atStart = new Date('2026-11-24T05:00:00Z');
+test('a booking period closes exactly at its end time', () => {
+    const atEnd = new Date('2026-11-24T08:00:00Z');
     assert.throws(
         () =>
             bookVisit(
-                createInitialState(atStart),
+                createInitialState(atEnd),
                 {
                     date: '2026-11-24',
                     period: 'afternoon',
                     service: 'physical_exam',
                     notes: '',
                 },
-                atStart,
+                atEnd,
             ),
-        /already started/,
+        /has ended/,
     );
 });
 test('another service cannot be booked in a period already occupied by this student', () => {
@@ -245,5 +246,38 @@ test('unsupported legacy services are rejected', () => {
                 now,
             ),
         /available clinic service/,
+    );
+});
+
+test('one multi-service visit reserves the entire date until it is cancelled', () => {
+    const state = { ...createInitialState(now), visits: [] };
+    const date = '2026-11-26';
+    const next = bookVisit(
+        state,
+        {
+            date,
+            period: 'afternoon',
+            services: ['xray_verification', 'medical_clearance_submission'],
+            notes: '',
+        },
+        now,
+        'afternoon-visit',
+    );
+    assert.equal(next.visits.length, 1);
+    assert.deepEqual(next.visits[0].services, [
+        'xray_verification',
+        'medical_clearance_submission',
+    ]);
+    const morning = {
+        date,
+        period: 'morning',
+        service: 'physical_exam',
+        notes: '',
+    } as const;
+    assert.throws(() => bookVisit(next, morning, now), /Cancel it/);
+    const cancelled = cancelVisit(next, 'afternoon-visit', now);
+    assert.equal(
+        bookVisit(cancelled, morning, now).visits[0].period,
+        'morning',
     );
 });

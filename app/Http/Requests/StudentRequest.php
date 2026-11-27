@@ -23,7 +23,10 @@ class StudentRequest extends FormRequest
             'name' => ['required', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:150'],
             'program' => ['required', 'string', 'max:120'],
+            'college' => ['nullable', 'string', 'max:150'],
             'year_level' => ['required', 'integer', 'between:1,6'],
+            'age' => ['nullable', 'integer', 'between:1,130'],
+            'section' => ['nullable', 'string', 'max:60'],
         ];
     }
 }

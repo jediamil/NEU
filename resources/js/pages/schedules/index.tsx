@@ -4,12 +4,11 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock3,
-    Info,
     LoaderCircle,
     Pencil,
     Plus,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
     dateLabel,
@@ -31,7 +30,6 @@ import { cn } from '@/lib/utils';
 import { index, store, update } from '@/routes/schedules';
 import { index as roster } from '@/routes/scheduled-students';
 import type { ClinicDay } from '@/types/clinic';
-
 function shiftWeek(date: string, days: number) {
     const value = new Date(date + 'T00:00:00');
     value.setDate(value.getDate() + days);
@@ -43,12 +41,38 @@ function shiftWeek(date: string, days: number) {
         String(value.getDate()).padStart(2, '0')
     );
 }
+
+function remainingPlaces(day: ClinicDay, slot: ClinicDay['slots'][number]) {
+    return Math.max(
+        0,
+        Math.min(
+            slot.capacity - slot.reserved,
+            day.daily_capacity - day.booked,
+        ),
+    );
+}
+
+function dayStatus(day: ClinicDay, now: number) {
+    if (day.is_past) return 'Past date';
+    if (!day.id) return 'No schedule';
+    if (!day.is_open) return 'Closed by staff';
+    const active = day.slots.filter(
+        (slot) => Date.parse(slot.booking_closes_at) > now,
+    );
+    if (!active.length) return 'Booking ended';
+    return active.some((slot) => remainingPlaces(day, slot) > 0)
+        ? 'Accepting bookings'
+        : 'No places left';
+}
+
 function ScheduleDialog({
     day,
     onClose,
+    onSaved,
 }: {
     day?: ClinicDay;
     onClose: () => void;
+    onSaved: (date: string) => void;
 }) {
     const form = useForm({
         date:
@@ -59,11 +83,15 @@ function ScheduleDialog({
         morning_capacity: day?.morning_capacity ?? 24,
         afternoon_capacity: day?.afternoon_capacity ?? 24,
         daily_capacity: day?.daily_capacity ?? 48,
+        booking_cutoff: day?.booking_cutoff ?? '16:00',
         is_open: day?.id ? day.is_open : true,
     });
     function submit(event: FormEvent) {
         event.preventDefault();
-        const options = { preserveScroll: true, onSuccess: onClose };
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => onSaved(form.data.date),
+        };
         if (day?.id) form.patch(update.url(day.id), options);
         else form.post(store.url(), options);
     }
@@ -80,8 +108,8 @@ function ScheduleDialog({
                         {day?.id ? 'Edit clinic day' : 'Add clinic day'}
                     </DialogTitle>
                     <DialogDescription>
-                        All services share two booking periods. Set each
-                        period’s capacity and the total daily maximum.
+                        Choose whether students can book this date and how many
+                        visits the clinic can handle.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="space-y-5">
@@ -101,14 +129,23 @@ function ScheduleDialog({
                             required
                         />
                     </Field>
+                    {day?.id && (
+                        <p className="text-xs text-muted-foreground">
+                            Select another date on the calendar to open a
+                            different day.
+                        </p>
+                    )}
                     <div className="rounded-xl border bg-muted/40 p-4 text-xs leading-6 text-muted-foreground">
                         <p>Morning: 8:00 AM–12:00 PM</p>
                         <p>Afternoon: 1:00–4:00 PM</p>
-                        <p>No appointments during the midday break.</p>
+                        <p>
+                            Set a period to 0 places to close it. Times are
+                            Philippine time.
+                        </p>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <Field
-                            label="Morning capacity"
+                            label="Morning places"
                             htmlFor="morning-capacity"
                             error={form.errors.morning_capacity}
                         >
@@ -128,7 +165,7 @@ function ScheduleDialog({
                             />
                         </Field>
                         <Field
-                            label="Afternoon capacity"
+                            label="Afternoon places"
                             htmlFor="afternoon-capacity"
                             error={form.errors.afternoon_capacity}
                         >
@@ -149,7 +186,7 @@ function ScheduleDialog({
                         </Field>
                     </div>
                     <Field
-                        label="Shared daily maximum"
+                        label="Total visits allowed for the day"
                         htmlFor="daily-capacity"
                         error={form.errors.daily_capacity}
                     >
@@ -168,6 +205,30 @@ function ScheduleDialog({
                             required
                         />
                     </Field>
+                    <Field
+                        label="Same-day booking cutoff"
+                        htmlFor="booking-cutoff"
+                        error={form.errors.booking_cutoff}
+                    >
+                        <Input
+                            id="booking-cutoff"
+                            type="time"
+                            min="08:00"
+                            max="16:00"
+                            value={form.data.booking_cutoff}
+                            onChange={(event) =>
+                                form.setData(
+                                    'booking_cutoff',
+                                    event.target.value,
+                                )
+                            }
+                            required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Philippine time. A period closes at this time or
+                            when it ends, whichever comes first.
+                        </p>
+                    </Field>
                     <label className="flex items-center gap-3 rounded-xl border p-4 text-xs">
                         <input
                             type="checkbox"
@@ -180,7 +241,8 @@ function ScheduleDialog({
                         <span>
                             Open for new appointments
                             <span className="mt-1 block text-[11px] text-muted-foreground">
-                                Closing a day preserves its existing bookings.
+                                Turn this off to stop new bookings for this
+                                date.
                             </span>
                         </span>
                     </label>
@@ -204,6 +266,7 @@ function ScheduleDialog({
         </Dialog>
     );
 }
+
 export default function Schedules({
     days,
     week,
@@ -219,6 +282,11 @@ export default function Schedules({
     const [editing, setEditing] = useState<ClinicDay | undefined>();
     const [open, setOpen] = useState(false);
     const day = days.find((item) => item.date === selected) ?? days[0];
+    const [now, setNow] = useState(Date.now);
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now()), 15_000);
+        return () => window.clearInterval(timer);
+    }, []);
     function edit(value?: ClinicDay) {
         setEditing(value);
         setOpen(true);
@@ -228,9 +296,8 @@ export default function Schedules({
             <Head title="Clinic schedule" />
             <div className="clinic-page">
                 <PageHeading
-                    eyebrow="A WELL-PLANNED CLINIC"
                     title="Clinic schedule"
-                    description="Manage Morning and Afternoon availability and shared capacity."
+                    description="Select a date to open or close student booking and set how many visits the clinic can take."
                 >
                     <Button onClick={() => edit()}>
                         <Plus className="size-4" />
@@ -276,6 +343,7 @@ export default function Schedules({
                             <button
                                 key={item.date}
                                 onClick={() => setSelected(item.date)}
+                                aria-pressed={item.date === day.date}
                                 className={cn(
                                     'relative rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                                     item.date === day.date
@@ -295,20 +363,8 @@ export default function Schedules({
                                 <p className="mt-2 text-2xl font-semibold">
                                     {item.number}
                                 </p>
-                                <p
-                                    className={cn(
-                                        'mt-3 text-[10px]',
-                                        item.is_open
-                                            ? 'text-primary'
-                                            : 'text-muted-foreground',
-                                    )}
-                                >
-                                    {item.is_open
-                                        ? item.booked +
-                                          ' / ' +
-                                          item.daily_capacity +
-                                          ' booked'
-                                        : 'Closed'}
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    {dayStatus(item, now)}
                                 </p>
                             </button>
                         ))}
@@ -318,11 +374,14 @@ export default function Schedules({
                     <SectionHeading
                         title={dateLabel(day.date)}
                         description={
-                            day.is_open
-                                ? 'Morning and Afternoon share the daily maximum of ' +
+                            day.id
+                                ? dayStatus(day, now) +
+                                  ' · ' +
+                                  day.booked +
+                                  ' of ' +
                                   day.daily_capacity +
-                                  '.'
-                                : 'Closed to new bookings.'
+                                  ' visits booked'
+                                : 'Set availability to let students book this date.'
                         }
                     >
                         <div className="flex gap-2">
@@ -334,13 +393,11 @@ export default function Schedules({
                                 </Link>
                             </Button>
                             {!day.is_past && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => edit(day)}
-                                >
+                                <Button size="sm" onClick={() => edit(day)}>
                                     <Pencil className="size-3.5" />
-                                    {day.id ? 'Edit day' : 'Set availability'}
+                                    {day.id
+                                        ? 'Edit availability'
+                                        : 'Set availability'}
                                 </Button>
                             )}
                         </div>
@@ -356,44 +413,45 @@ export default function Schedules({
                                         <Clock3 className="size-4 text-primary" />
                                         {slot.label}
                                     </div>
-                                    <p className="mt-3 text-xs text-muted-foreground">
-                                        {slot.reserved} reserved ·{' '}
-                                        {slot.capacity} capacity
+                                    <p className="mt-3 text-sm font-medium">
+                                        {!day.is_open
+                                            ? 'Closed by staff'
+                                            : slot.capacity === 0
+                                              ? 'Closed by staff'
+                                              : Date.parse(
+                                                      slot.booking_closes_at,
+                                                  ) <= now
+                                                ? 'Booking ended'
+                                                : remainingPlaces(day, slot) +
+                                                  ' places left'}
                                     </p>
-                                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
-                                        <div
-                                            className="h-full bg-primary"
-                                            style={{
-                                                width:
-                                                    Math.min(
-                                                        100,
-                                                        slot.capacity
-                                                            ? (slot.reserved /
-                                                                  slot.capacity) *
-                                                                  100
-                                                            : 0,
-                                                    ) + '%',
-                                            }}
-                                        />
-                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        {slot.reserved} booked · {slot.capacity}{' '}
+                                        period limit
+                                    </p>
                                 </div>
                             ))}
                         </div>
                     ) : (
                         <p className="px-5 pb-5 text-xs text-muted-foreground">
-                            Set availability for this date to open booking
-                            periods.
+                            No booking periods have been set for this date.
                         </p>
                     )}
                 </section>
-                <p className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
-                    <Info className="mt-0.5 size-4 shrink-0" />
-                    Existing appointments keep their original times and count
-                    toward the applicable period and daily capacity.
+                <p className="text-xs leading-5 text-muted-foreground">
+                    Same-day bookings follow the cutoff set for the selected
+                    date (Philippine time).
                 </p>
             </div>
             {open && (
-                <ScheduleDialog day={editing} onClose={() => setOpen(false)} />
+                <ScheduleDialog
+                    day={editing}
+                    onClose={() => setOpen(false)}
+                    onSaved={(date) => {
+                        setSelected(date);
+                        setOpen(false);
+                    }}
+                />
             )}
         </>
     );

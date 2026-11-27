@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable $date
  * @property string $opening_time
  * @property string $closing_time
+ * @property string $booking_cutoff
  * @property int $slot_minutes
  * @property int $slot_capacity
  * @property int $daily_capacity
@@ -24,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $afternoon_capacity
  * @property-read Collection<int, AppointmentSlot> $slots
  */
-#[Fillable(['date', 'opening_time', 'closing_time', 'slot_minutes', 'slot_capacity', 'daily_capacity', 'is_open', 'morning_capacity', 'afternoon_capacity'])]
+#[Fillable(['date', 'opening_time', 'closing_time', 'booking_cutoff', 'slot_minutes', 'slot_capacity', 'daily_capacity', 'is_open', 'morning_capacity', 'afternoon_capacity'])]
 class ClinicSchedule extends Model
 {
     /** @use HasFactory<ClinicScheduleFactory> */
@@ -49,6 +50,11 @@ class ClinicSchedule extends Model
     public function slots(): HasMany
     {
         return $this->hasMany(AppointmentSlot::class);
+    }
+
+    public function bookingClosesAt(AppointmentSlot $slot): CarbonImmutable
+    {
+        return $this->date->setTimeFromTimeString($this->booking_cutoff ?? '16:00')->min($slot->ends_at);
     }
 
     public function generateSlots(): void

@@ -1,8 +1,8 @@
 import { Link } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
-import Heading from '@/components/heading';
+import { Monitor, ShieldCheck, UserRound } from 'lucide-react';
+import { PageHeading } from '@/components/clinic-ui';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
@@ -14,17 +14,17 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Profile',
         href: edit(),
-        icon: null,
+        icon: UserRound,
     },
     {
         title: 'Security',
         href: editSecurity(),
-        icon: null,
+        icon: ShieldCheck,
     },
     {
         title: 'Appearance',
         href: editAppearance(),
-        icon: null,
+        icon: Monitor,
     },
 ];
 
@@ -32,16 +32,16 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
 
     return (
-        <div className="px-4 py-6">
-            <Heading
+        <div className="clinic-page">
+            <PageHeading
                 title="Settings"
-                description="Manage your profile and account settings"
+                description="Manage your profile, sign-in security, and display preferences."
             />
 
-            <div className="flex flex-col lg:flex-row lg:space-x-12">
-                <aside className="w-full max-w-xl lg:w-48">
+            <div className="grid items-start gap-5 lg:grid-cols-[12rem_minmax(0,1fr)]">
+                <aside className="panel p-2">
                     <nav
-                        className="flex flex-col space-y-1 space-x-0"
+                        className="flex flex-wrap gap-1 lg:flex-col"
                         aria-label="Settings"
                     >
                         {sidebarNavItems.map((item, index) => (
@@ -50,11 +50,19 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className={cn('w-full justify-start', {
-                                    'bg-muted': isCurrentOrParentUrl(item.href),
+                                className={cn('h-10 justify-start lg:w-full', {
+                                    'bg-accent text-accent-foreground':
+                                        isCurrentOrParentUrl(item.href),
                                 })}
                             >
-                                <Link href={item.href}>
+                                <Link
+                                    href={item.href}
+                                    aria-current={
+                                        isCurrentOrParentUrl(item.href)
+                                            ? 'page'
+                                            : undefined
+                                    }
+                                >
                                     {item.icon && (
                                         <item.icon className="h-4 w-4" />
                                     )}
@@ -65,13 +73,9 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                     </nav>
                 </aside>
 
-                <Separator className="my-6 lg:hidden" />
-
-                <div className="flex-1 md:max-w-2xl">
-                    <section className="max-w-xl space-y-12">
-                        {children}
-                    </section>
-                </div>
+                <section className="panel min-w-0 space-y-8 p-5 sm:p-7">
+                    {children}
+                </section>
             </div>
         </div>
     );

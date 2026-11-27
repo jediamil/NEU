@@ -272,7 +272,11 @@ function useStudentStore() {
                 await api('/api/v1/visits', 'POST', {
                     date: added.date,
                     period: added.period,
-                    service: added.service,
+                    ...(added.services &&
+                    (added.services.length > 1 ||
+                        added.service === 'medical_clearance_submission')
+                        ? { services: added.services }
+                        : { service: added.service }),
                     notes: added.notes,
                 });
             else if (cancelled)

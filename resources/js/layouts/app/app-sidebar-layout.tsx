@@ -20,13 +20,25 @@ export default function AppSidebarLayout({
     }, [flash]);
     return (
         <AppShell variant="sidebar">
+            <a
+                href="#portal-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+            >
+                Skip to content
+            </a>
             <AppSidebar />
             <AppContent variant="sidebar" className="min-w-0 overflow-x-clip">
                 <AppSidebarHeader
                     breadcrumbs={breadcrumbs}
                     liveStatus={liveStatus}
                 />
-                {children}
+                <div
+                    id="portal-content"
+                    tabIndex={-1}
+                    className="min-w-0 outline-none"
+                >
+                    {children}
+                </div>
             </AppContent>
         </AppShell>
     );

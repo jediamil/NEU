@@ -43,11 +43,10 @@ export default function Clearances({
             <Head title="Medical clearances" />
             <div className="clinic-page">
                 <PageHeading
-                    eyebrow="ENROLLMENT READINESS"
                     title="Medical clearances"
                     description={
                         clinic
-                            ? 'Help every student take the next step. Review requirements and keep clearance records up to date.'
+                            ? 'Review screening requirements and update medical clearance for enrollment.'
                             : 'Look up student medical clearance status for enrollment verification.'
                     }
                 >

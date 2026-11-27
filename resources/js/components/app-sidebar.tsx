@@ -3,8 +3,8 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     CalendarRange,
+    ListChecks,
     ClipboardCheck,
-    HeartPulse,
     LayoutGrid,
     Megaphone,
     ShieldCheck,
@@ -49,7 +49,7 @@ export function AppSidebar() {
               {
                   title: 'Scheduled students',
                   href: scheduledStudents(),
-                  icon: CalendarRange,
+                  icon: ListChecks,
               },
               {
                   title: 'Medical clearances',
@@ -81,7 +81,7 @@ export function AppSidebar() {
             variant="sidebar"
             className="border-r border-sidebar-border"
         >
-            <SidebarHeader className="px-4 py-6">
+            <SidebarHeader className="border-b border-sidebar-border px-4 py-4 group-data-[collapsible=icon]:px-2">
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton
@@ -96,28 +96,14 @@ export function AppSidebar() {
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
-            <SidebarContent className="px-2 pt-3">
-                <p className="mb-1 px-5 text-[9px] font-semibold tracking-[0.18em] text-muted-foreground uppercase group-data-[collapsible=icon]:hidden">
+            <SidebarContent className="px-2 pt-5">
+                <p className="mb-2 px-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase group-data-[collapsible=icon]:hidden">
                     {clinic ? 'Clinic workspace' : 'Registrar workspace'}
                 </p>
                 <NavMain items={items} />
             </SidebarContent>
-            <SidebarFooter className="gap-4 p-4">
-                <div className="rounded-xl border border-primary/10 bg-primary/4 p-4 group-data-[collapsible=icon]:hidden">
-                    <HeartPulse
-                        className="mb-3 size-5 text-primary"
-                        strokeWidth={1.6}
-                    />
-                    <p className="text-xs font-semibold">
-                        Care for your campus.
-                    </p>
-                    <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
-                        A simpler clinic experience for every NEU student.
-                    </p>
-                </div>
-                <div className="border-t pt-3">
-                    <NavUser />
-                </div>
+            <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:p-2">
+                <NavUser />
             </SidebarFooter>
         </Sidebar>
     );

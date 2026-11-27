@@ -3,15 +3,25 @@
         "name": "NEUHealth",
         "slug": "neu-health-student",
         "owner": "iamjediamil",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "orientation": "portrait",
         "icon": "./assets/icon.png",
         "userInterfaceStyle": "automatic",
-        "platforms": ["ios", "web"],
+        "platforms": ["android", "ios", "web"],
+        "updates": {
+            "checkAutomatically": "NEVER",
+            "url": "https://u.expo.dev/62d95554-b7a5-46ba-b083-4171d4aba165"
+        },
+        "android": {
+            "package": "com.iamjediamil.neuhealthstudent",
+            "versionCode": 2,
+            "runtimeVersion": { "policy": "appVersion" }
+        },
         "ios": {
             "supportsTablet": false,
             "bundleIdentifier": "com.iamjediamil.neuhealthstudent",
-            "buildNumber": "4",
+            "buildNumber": "6",
+            "runtimeVersion": { "policy": "appVersion" },
             "infoPlist": {
                 "CFBundleDisplayName": "NEU Health",
                 "ITSAppUsesNonExemptEncryption": false
@@ -25,7 +35,12 @@
                 "projectId": "62d95554-b7a5-46ba-b083-4171d4aba165"
             }
         },
-        "plugins": ["expo-font", "expo-secure-store", "expo-router"],
+        "plugins": [
+            "expo-font",
+            "expo-secure-store",
+            "expo-router",
+            "expo-updates"
+        ],
         "scheme": "neuhealth"
     }
 }

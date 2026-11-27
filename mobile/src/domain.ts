@@ -3,7 +3,8 @@ export type Service =
     | 'physical_exam'
     | 'xray_verification'
     | 'dental_consultation'
-    | 'tooth_extraction';
+    | 'tooth_extraction'
+    | 'medical_clearance_submission';
 export type VisitStatus =
     | 'scheduled'
     | 'checked_in'
@@ -15,6 +16,7 @@ export type Profile = {
     name: string;
     studentNumber: string;
     program: string;
+    college?: string | null;
     yearLevel: number;
     email: string;
     phone: string;
@@ -24,7 +26,9 @@ export type Visit = {
     reference: string;
     date: string;
     period: Period;
-    service: Service;
+    service: Service | 'document_submission';
+    services?: (Service | 'document_submission')[] | null;
+    timeRange?: string;
     status: VisitStatus;
     notes: string;
 };
@@ -65,6 +69,7 @@ export type PrototypeState = {
             afternoon: number;
             reserved: Record<Period, number>;
             dailyRemaining: number;
+            bookingCutoff?: string;
         }
     >;
 };
@@ -82,6 +87,12 @@ export const SERVICES: Record<
         description: string;
     }
 > = {
+    medical_clearance_submission: {
+        label: 'Medical clearance submission',
+        short: 'Clearance submission',
+        icon: 'scan-outline',
+        description: 'Bring your medical clearance requirements to the clinic.',
+    },
     physical_exam: {
         label: 'Physical examination',
         short: 'Physical exam',
@@ -108,6 +119,23 @@ export const SERVICES: Record<
         description: 'Schedule a dental appointment for clinic assessment.',
     },
 };
+export function bookingServices(value: unknown): Service[] | null {
+    if (
+        !Array.isArray(value) ||
+        !value.length ||
+        value.some(
+            (service) =>
+                typeof service !== 'string' ||
+                !Object.hasOwn(SERVICES, service),
+        ) ||
+        new Set(value).size !== value.length
+    ) {
+        return null;
+    }
+
+    return value as Service[];
+}
+
 export const PERIODS: Record<
     Period,
     { label: string; time: string; startHour: number; endHour: number }
@@ -180,18 +208,41 @@ export function dateLabel(
         options ?? { month: 'short', day: 'numeric', year: 'numeric' },
     ).format(new Date(date + 'T12:00:00'));
 }
-export function bookingDates(now = new Date()): string[] {
+export function bookingDates(
+    now = new Date(),
+    includeWeekends = true,
+): string[] {
     const today = campusDate(now);
     return Array.from({ length: 29 }, (_, index) =>
         shiftDate(today, index),
-    ).filter((date) => ![0, 6].includes(new Date(date + 'T12:00:00').getDay()));
+    ).filter(
+        (date) =>
+            includeWeekends ||
+            ![0, 6].includes(new Date(date + 'T12:00:00').getDay()),
+    );
 }
 export function periodStarts(date: string, period: Period): Date {
+    return periodBoundary(date, PERIODS[period].startHour);
+}
+export function periodEnds(date: string, period: Period): Date {
+    return periodBoundary(date, PERIODS[period].endHour);
+}
+export function bookingClosesAt(
+    date: string,
+    period: Period,
+    cutoff?: string,
+): number {
+    const periodEnd = periodEnds(date, period).getTime();
+    return cutoff
+        ? Math.min(
+              periodEnd,
+              Date.parse(date + 'T' + cutoff.slice(0, 5) + ':00+08:00'),
+          )
+        : periodEnd;
+}
+function periodBoundary(date: string, hour: number): Date {
     return new Date(
-        date +
-            'T' +
-            String(PERIODS[period].startHour).padStart(2, '0') +
-            ':00:00+08:00',
+        date + 'T' + String(hour).padStart(2, '0') + ':00:00+08:00',
     );
 }
 export function demoReservations(date: string): Record<Period, number> {
@@ -213,14 +264,15 @@ export function availability(
             reserved: { morning: 0, afternoon: 0 },
             dailyRemaining: 0,
         };
+        const cutoff = state.slots?.[date]?.bookingCutoff;
         return {
             ...live,
             morning:
-                periodStarts(date, 'morning').getTime() > now.getTime()
+                bookingClosesAt(date, 'morning', cutoff) > now.getTime()
                     ? live.morning
                     : 0,
             afternoon:
-                periodStarts(date, 'afternoon').getTime() > now.getTime()
+                bookingClosesAt(date, 'afternoon', cutoff) > now.getTime()
                     ? live.afternoon
                     : 0,
         };
@@ -241,9 +293,9 @@ export function availability(
         0,
         48 - reserved.morning - reserved.afternoon,
     );
-    const validDate = bookingDates(now).includes(date);
+    const validDate = bookingDates(now, false).includes(date);
     const remaining = (period: Period) =>
-        validDate && periodStarts(date, period).getTime() > now.getTime()
+        validDate && periodEnds(date, period).getTime() > now.getTime()
             ? Math.max(0, Math.min(24 - reserved[period], dailyRemaining))
             : 0;
     return {
@@ -256,6 +308,7 @@ export function availability(
 export function createInitialState(now = new Date()): PrototypeState {
     const upcoming = bookingDates(
         new Date(now.getTime() + 24 * 60 * 60 * 1000),
+        false,
     ).find((date) => demoReservations(date).morning < 24)!;
     return {
         version: 1,
@@ -401,39 +454,53 @@ export function restoreState(raw: string): PrototypeState {
 }
 export function bookVisit(
     state: PrototypeState,
-    input: { date: string; period: Period; service: Service; notes: string },
+    input: {
+        date: string;
+        period: Period;
+        service?: Service;
+        services?: Service[];
+        notes: string;
+    },
     now = new Date(),
     id = String(Date.now()),
 ): PrototypeState {
-    if (!(input.service in SERVICES) || !(input.period in PERIODS))
+    const services = bookingServices(input.services ?? [input.service]);
+    if (!services || !Object.hasOwn(PERIODS, input.period))
         throw new Error(
             'Choose an available clinic service and booking period.',
         );
-    if (!bookingDates(now).includes(input.date))
+    if (!bookingDates(now, state.connected === true).includes(input.date))
         throw new Error(
             'Choose an open clinic date within the next four weeks.',
         );
-    if (periodStarts(input.date, input.period).getTime() <= now.getTime())
+    if (
+        bookingClosesAt(
+            input.date,
+            input.period,
+            state.slots?.[input.date]?.bookingCutoff,
+        ) <= now.getTime()
+    )
         throw new Error(
-            'This booking period has already started. Please choose another.',
+            'Booking has ended for this period. Please choose another.',
         );
     if (
         state.visits.some(
             (visit) =>
-                visit.date === input.date &&
-                visit.period === input.period &&
-                visit.status !== 'cancelled',
+                visit.date === input.date && visit.status !== 'cancelled',
         )
     )
         throw new Error(
-            'You already have an appointment in this booking period.',
+            'You already have an appointment on this date. Cancel it before booking a different period.',
         );
     if (availability(state, input.date, now)[input.period] <= 0)
         throw new Error('This booking period is full. Please choose another.');
     if (input.notes.length > 1000)
         throw new Error('Keep appointment notes within 1,000 characters.');
     const visit: Visit = {
-        ...input,
+        date: input.date,
+        period: input.period,
+        service: services[0],
+        services,
         notes: input.notes.trim(),
         id,
         reference:
@@ -491,7 +558,7 @@ export function guideAnswer(question: string): string {
     if (/cancel|reschedul/i.test(question))
         return 'Open My visits and select your scheduled appointment. You can cancel before the period starts, then book another available period. Prototype changes are saved only on this device.';
     if (/book|appointment|schedul|time|slot/i.test(question))
-        return 'Tap Book a visit, choose a service and an open calendar date, then select Morning (8 AM–12 PM) or Afternoon (1–4 PM). A full or started period is unavailable. Bring your reference when you visit the clinic.';
+        return 'Tap Book a visit, choose a service and an open calendar date, then select Morning (8 AM–12 PM) or Afternoon (1–4 PM). Booking closes at the cutoff set by the clinic or when the period ends, whichever comes first. Bring your reference when you visit the clinic.';
     if (/clearance|record|history|exam|x.?ray/i.test(question))
         return 'Open Records to see each school-year clearance and its checklist. Tap an earlier year to view that year’s examination record. Clinic staff review requirements and update clearance; booking an appointment does not automatically clear you.';
     if (/document|bring|requirement/i.test(question))

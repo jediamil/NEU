@@ -62,7 +62,7 @@
 }
 
 :root {
-    --background: #f6f8f7;
+    --background: #f3f6f5;
     --foreground: #24352d;
     --card: #ffffff;
     --card-foreground: #24352d;
@@ -78,7 +78,7 @@
     --accent-foreground: #21694e;
     --destructive: #c94c4c;
     --destructive-foreground: #ffffff;
-    --border: #e6ece8;
+    --border: #dce6e0;
     --input: #dfe6e1;
     --ring: #82b49b;
     --radius: 0.75rem;
@@ -145,25 +145,25 @@
 
 @layer components {
     .clinic-page {
-        @apply mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-5 py-7 md:px-8 md:py-8 xl:px-9;
+        @apply mx-auto flex w-full max-w-[1500px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8;
     }
     .panel {
-        @apply overflow-hidden rounded-xl border border-border bg-card shadow-[0_2px_5px_0_rgb(20_50_30_/_0.015)];
+        @apply overflow-hidden rounded-xl border border-border bg-card shadow-sm;
     }
     .field-input {
-        @apply h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-xs text-foreground transition-colors outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 disabled:opacity-50;
+        @apply h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base text-foreground transition-colors outline-none focus:border-ring focus:ring-2 focus:ring-ring/25 disabled:opacity-50 md:text-sm;
     }
     textarea.field-input {
         @apply h-auto py-3 leading-6;
     }
     .clinic-table {
-        @apply w-full text-left text-xs;
+        @apply w-full text-left text-sm;
     }
     .clinic-table th {
-        @apply border-y border-border bg-muted/35 px-5 py-3 text-[10px] font-medium whitespace-nowrap text-muted-foreground;
+        @apply border-y border-border bg-muted/65 px-4 py-3 text-xs font-semibold whitespace-nowrap text-foreground sm:px-5;
     }
     .clinic-table td {
-        @apply border-b border-border/70 px-5 py-4;
+        @apply border-b border-border/70 px-4 py-4 align-middle sm:px-5;
     }
     .clinic-table tr:last-child td {
         @apply border-b-0;

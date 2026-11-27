@@ -29,9 +29,8 @@ export default function Students({
             <Head title="Student records" />
             <div className="clinic-page">
                 <PageHeading
-                    eyebrow="CAMPUS COMMUNITY"
                     title="Student records"
-                    description="The people at the heart of your clinic. Find student details and follow their enrollment progress."
+                    description="Find students by name or student number and open their clinic records."
                 >
                     <span className="mr-2 text-xs text-muted-foreground">
                         {total} students on record

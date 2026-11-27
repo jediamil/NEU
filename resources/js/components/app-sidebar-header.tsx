@@ -23,7 +23,7 @@ export function AppSidebarHeader({
     const [help, setHelp] = useState(false);
     return (
         <>
-            <header className="flex h-[68px] shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-card/80 px-5 md:px-8">
+            <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-card/80 px-4 sm:px-6 lg:px-8">
                 <div className="flex min-w-0 items-center gap-3">
                     <SidebarTrigger className="-ml-2 text-muted-foreground" />
                     <span className="hidden h-4 border-l sm:block" />
@@ -38,10 +38,10 @@ export function AppSidebarHeader({
                                 ? 'Clinic changes update automatically through Neon Realtime'
                                 : 'Clinic portal connection status'
                         }
-                        className="hidden items-center gap-1.5 rounded-md border border-primary/10 bg-primary/5 px-2.5 py-1 text-[9px] font-medium tracking-wide text-primary sm:inline-flex"
+                        className="hidden items-center gap-1.5 rounded-md border border-primary/10 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary sm:inline-flex"
                     >
                         <span className="size-1 rounded-full bg-primary" />
-                        {liveStatus ?? 'CLINIC PORTAL'}
+                        {liveStatus ?? 'Health Portal'}
                     </span>
                     <Button
                         variant="ghost"

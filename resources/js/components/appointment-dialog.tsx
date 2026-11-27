@@ -3,6 +3,7 @@ import { CalendarDays, LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Field, timeLabel } from '@/components/clinic-ui';
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -64,7 +65,9 @@ export function AppointmentDialog({
     const form = useForm({
         student_id: appointment ? String(appointment.student.id) : '',
         appointment_slot_id: appointment ? String(appointment.slot_id) : '',
-        service: appointment?.service ?? 'physical_exam',
+        services: appointment
+            ? (appointment.services ?? [appointment.service])
+            : [],
         notes: appointment?.notes ?? '',
     });
     function submit(event: FormEvent) {
@@ -86,13 +89,12 @@ export function AppointmentDialog({
                         <CalendarDays className="size-5" />
                     </div>
                     <DialogTitle>
-                        {appointment
-                            ? 'Reschedule appointment'
-                            : 'New appointment'}
+                        {appointment ? 'Edit appointment' : 'New appointment'}
                     </DialogTitle>
                     <DialogDescription>
-                        Choose Morning or Afternoon. All services share period
-                        and daily capacity.
+                        {appointment
+                            ? 'Cancel this appointment before booking a different date or period.'
+                            : 'Select one or more services for this visit. Only one booking per student per day is allowed.'}
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="mt-2 space-y-5">
@@ -109,6 +111,7 @@ export function AppointmentDialog({
                                 form.setData('student_id', e.target.value)
                             }
                             required
+                            disabled={!!appointment}
                         >
                             <option value="">Choose a student</option>
                             {students.map((student) => (
@@ -118,37 +121,68 @@ export function AppointmentDialog({
                             ))}
                         </select>
                     </Field>
-                    <Field
-                        label="Transaction type"
-                        htmlFor="booking-service"
-                        error={form.errors.service}
-                    >
-                        <select
-                            id="booking-service"
-                            className="field-input"
-                            value={form.data.service}
-                            onChange={(e) =>
-                                form.setData('service', e.target.value)
-                            }
-                        >
-                            {appointment && !services[appointment.service] && (
-                                <option value={appointment.service}>
-                                    {appointment.service_label} (existing
-                                    service)
-                                </option>
-                            )}
-                            {Object.entries(services).map(([value, label]) => (
-                                <option key={value} value={value}>
+                    <fieldset className="grid gap-2">
+                        <legend className="mb-2 text-sm font-medium">
+                            Services
+                        </legend>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            {Object.entries({
+                                ...Object.fromEntries(
+                                    (appointment?.services ?? [])
+                                        .filter((service) => !services[service])
+                                        .map((service) => [
+                                            service,
+                                            service === 'document_submission'
+                                                ? 'Document submission (existing service)'
+                                                : service,
+                                        ]),
+                                ),
+                                ...services,
+                            }).map(([value, label]) => (
+                                <label
+                                    key={value}
+                                    className="flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        className="mt-0.5 size-4 shrink-0 accent-primary"
+                                        checked={form.data.services.includes(
+                                            value,
+                                        )}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                'services',
+                                                event.target.checked
+                                                    ? [
+                                                          ...form.data.services,
+                                                          value,
+                                                      ]
+                                                    : form.data.services.filter(
+                                                          (service) =>
+                                                              service !== value,
+                                                      ),
+                                            )
+                                        }
+                                    />
                                     {label}
-                                </option>
+                                </label>
                             ))}
-                        </select>
-                    </Field>
+                        </div>
+                        <InputError
+                            message={
+                                form.errors.services ??
+                                Object.entries(form.errors).find(([key]) =>
+                                    key.startsWith('services.'),
+                                )?.[1]
+                            }
+                        />
+                    </fieldset>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <Field label="Appointment date" htmlFor="booking-date">
                             <Input
                                 id="booking-date"
                                 type="date"
+                                readOnly={!!appointment}
                                 value={date}
                                 onChange={(e) => {
                                     setDate(e.target.value);
@@ -164,6 +198,7 @@ export function AppointmentDialog({
                         >
                             <select
                                 id="booking-time"
+                                disabled={!!appointment}
                                 className="field-input"
                                 value={form.data.appointment_slot_id}
                                 onChange={(e) =>
@@ -227,7 +262,8 @@ export function AppointmentDialog({
                             type="submit"
                             disabled={
                                 form.processing ||
-                                !form.data.appointment_slot_id
+                                !form.data.appointment_slot_id ||
+                                !form.data.services.length
                             }
                         >
                             {form.processing && (

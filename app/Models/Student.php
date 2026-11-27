@@ -17,16 +17,25 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string $name
  * @property string|null $email
  * @property string $program
+ * @property string|null $college
  * @property int $year_level
+ * @property int|null $age
+ * @property string|null $section
  * @property-read Clearance|null $clearance
  * @property-read Collection<int, Clearance> $clearances
  */
-#[Fillable(['student_number', 'name', 'email', 'program', 'year_level'])]
+#[Fillable(['student_number', 'name', 'email', 'program', 'college', 'year_level', 'age', 'section'])]
 #[Hidden(['neon_auth_id', 'theme'])]
 class Student extends Model
 {
     /** @use HasFactory<StudentFactory> */
     use HasFactory;
+
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return ['age' => 'integer'];
+    }
 
     /** @return HasMany<Appointment, $this> */
     public function appointments(): HasMany

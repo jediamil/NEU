@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\CarbonImmutable;
 use Database\Factories\AnnouncementFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -13,10 +14,12 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $title
  * @property string $body
  * @property string $audience
+ * @property string|null $image_path
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable $created_at
  */
-#[Fillable(['title', 'body', 'audience', 'author_id', 'published_at'])]
+#[Fillable(['title', 'body', 'audience', 'author_id', 'published_at', 'image_path'])]
+#[Hidden(['image_path'])]
 class Announcement extends Model
 {
     /** @use HasFactory<AnnouncementFactory> */

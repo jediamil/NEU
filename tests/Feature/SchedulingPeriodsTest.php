@@ -119,7 +119,7 @@ test('the legacy document service cannot be selected for a new booking', functio
     $this->assertDatabaseCount('appointments', 0);
 });
 
-test('a booking period becomes unavailable exactly when it starts', function (string $period, string $time) {
+test('a booking period becomes unavailable exactly when it ends', function (string $period, string $time) {
     $day = ClinicSchedule::factory()->create(['date' => '2026-11-24']);
     $day->generateSlots();
     $slot = $day->slots()->where('period', $period)->firstOrFail();
@@ -130,7 +130,7 @@ test('a booking period becomes unavailable exactly when it starts', function (st
     ])->assertSessionHasErrors('appointment_slot_id');
 
     $this->assertDatabaseCount('appointments', 0);
-})->with(['morning' => ['morning', '08:00:00'], 'afternoon' => ['afternoon', '13:00:00']]);
+})->with(['morning' => ['morning', '12:00:00'], 'afternoon' => ['afternoon', '16:00:00']]);
 
 test('period capacity cannot be lowered below legacy reservations and no times are changed', function () {
     $day = ClinicSchedule::factory()->create(['date' => '2026-11-25']);
@@ -143,4 +143,47 @@ test('period capacity cannot be lowered below legacy reservations and no times a
 
     $this->assertDatabaseHas('clinic_schedules', ['id' => $day->id, 'morning_capacity' => 24]);
     $this->assertDatabaseHas('appointment_slots', ['id' => $legacy->id, 'starts_at' => '2026-11-25 09:00:00', 'ends_at' => '2026-11-25 09:30:00']);
+});
+
+test('staff can close one period without cancelling its existing reservations', function () {
+    $day = ClinicSchedule::factory()->create(['date' => '2026-11-25', 'is_open' => true]);
+    $day->generateSlots();
+    $morning = $day->slots()->where('period', 'morning')->firstOrFail();
+    $appointment = Appointment::factory()->for($morning, 'slot')->create(['status' => 'scheduled']);
+
+    $this->actingAs(User::factory()->create())->patch(route('schedules.update', $day), [
+        'date' => '2026-11-25', 'morning_capacity' => 0, 'afternoon_capacity' => 24, 'daily_capacity' => 48, 'is_open' => true,
+    ])->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('appointment_slots', ['id' => $morning->id, 'capacity' => 0]);
+    $this->assertDatabaseHas('appointments', ['id' => $appointment->id, 'status' => 'scheduled']);
+    $this->post(route('appointments.store'), [
+        'student_id' => Student::factory()->create()->id, 'appointment_slot_id' => $morning->id, 'service' => 'physical_exam',
+    ])->assertSessionHasErrors('appointment_slot_id');
+});
+
+test('staff can set an earlier cutoff and booking closes at that time', function () {
+    $day = ClinicSchedule::factory()->create(['date' => '2026-11-25', 'is_open' => true]);
+    $day->generateSlots();
+    $staff = User::factory()->create();
+    $this->actingAs($staff);
+    $data = [
+        'date' => '2026-11-25', 'morning_capacity' => 24, 'afternoon_capacity' => 24,
+        'daily_capacity' => 48, 'is_open' => true,
+    ];
+    $this->patch(route('schedules.update', $day), [...$data, 'booking_cutoff' => '16:01'])
+        ->assertSessionHasErrors('booking_cutoff');
+    $this->patch(route('schedules.update', $day), [...$data, 'booking_cutoff' => '14:30'])
+        ->assertSessionHasNoErrors();
+
+    $slot = $day->slots()->where('period', 'afternoon')->firstOrFail();
+    $this->travelTo(new CarbonImmutable('2026-11-25 14:29:00'));
+    $this->post(route('appointments.store'), [
+        'student_id' => Student::factory()->create()->id, 'appointment_slot_id' => $slot->id, 'service' => 'physical_exam',
+    ])->assertSessionHasNoErrors();
+    $this->travelTo(new CarbonImmutable('2026-11-25 14:30:00'));
+    $this->post(route('appointments.store'), [
+        'student_id' => Student::factory()->create()->id, 'appointment_slot_id' => $slot->id, 'service' => 'physical_exam',
+    ])->assertSessionHasErrors('appointment_slot_id');
+    $this->assertDatabaseCount('appointments', 1);
 });

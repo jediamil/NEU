@@ -8,6 +8,12 @@ build:
               command: |
                   set -euo pipefail
                   npx expo prebuild --platform ios --no-install
+                  updates_plist="$(find ios -name Expo.plist -print -quit)"
+                  test -n "$updates_plist"
+                  plist_tool=/usr/libexec/PlistBuddy
+                  "$plist_tool" -c 'Add :EXUpdatesRequestHeaders dict' "$updates_plist" 2>/dev/null || true
+                  "$plist_tool" -c 'Set :EXUpdatesRequestHeaders:expo-channel-name preview' "$updates_plist" 2>/dev/null ||
+                    "$plist_tool" -c 'Add :EXUpdatesRequestHeaders:expo-channel-name string preview' "$updates_plist"
                   cd ios
                   pod install
         - run:
@@ -17,4 +23,4 @@ build:
               name: Upload the iPhone IPA
               inputs:
                   type: application-archive
-                  path: artifacts/NEU-Health-Student-Production.ipa
+                  path: mobile/artifacts/NEU-Health-Student-Production.ipa

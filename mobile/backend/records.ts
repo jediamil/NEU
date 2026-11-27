@@ -4,12 +4,12 @@ import { HTTPException } from 'hono/http-exception';
 import { pool } from './db.ts';
 import {
     bookingDates,
-    periodStarts,
+    bookingClosesAt,
     PERIODS,
-    SERVICES,
+    bookingServices,
     ACTIVE_SCHOOL_YEAR,
 } from '../src/domain.ts';
-import type { Period, Service } from '../src/domain.ts';
+import type { Period } from '../src/domain.ts';
 
 type Identity = { id: string; name: string; email: string };
 type Variables = { user: Identity; studentId: string };
@@ -83,13 +83,14 @@ records.get('/state', async (c) => {
         schedules,
     ] = await Promise.all([
         pool.query(
-            'SELECT name,student_number AS "studentNumber",program,year_level AS "yearLevel",email,phone,theme FROM public.students WHERE id=$1',
+            'SELECT name,student_number AS "studentNumber",program,college,year_level AS "yearLevel",email,phone,theme FROM public.students WHERE id=$1',
             [id],
         ),
         pool.query(
             `SELECT a.mobile_id::text AS id,a.reference,s.date::text,
             COALESCE(t.period,CASE WHEN t.starts_at::time < '12:00'::time THEN 'morning' ELSE 'afternoon' END) AS period,
-            a.service,a.status,COALESCE(a.notes,'') AS notes
+            a.service,to_jsonb(a)->'services' AS services,a.status,COALESCE(a.notes,'') AS notes,
+            to_char(t.starts_at,'FMHH12:MI AM') || ' to ' || to_char(t.ends_at,'FMHH12:MI AM') AS "timeRange"
             FROM public.appointments a JOIN public.appointment_slots t ON t.id=a.appointment_slot_id
             JOIN public.clinic_schedules s ON s.id=t.clinic_schedule_id WHERE a.student_id=$1 ORDER BY a.created_at DESC LIMIT 200`,
             [id],
@@ -115,7 +116,7 @@ records.get('/state', async (c) => {
             [dates[0], dates.at(-1)],
         ),
         pool.query(
-            `SELECT s.id,s.date::text,s.morning_capacity AS morning,s.afternoon_capacity AS afternoon,s.daily_capacity AS daily,s.is_open,
+            `SELECT s.id,s.date::text,s.morning_capacity AS morning,s.afternoon_capacity AS afternoon,s.daily_capacity AS daily,s.is_open,s.booking_cutoff,
             t.period,t.capacity,t.starts_at::text,t.ends_at::text FROM public.clinic_schedules s
             LEFT JOIN public.appointment_slots t ON t.clinic_schedule_id=s.id AND t.period IS NOT NULL WHERE s.date BETWEEN $1 AND $2`,
             [dates[0], dates.at(-1)],
@@ -137,7 +138,11 @@ records.get('/state', async (c) => {
                 : 0;
             const remaining = (period: Period) => {
                 const slot = day.find((row) => row.period === period);
-                if (!slot || periodStarts(date, period).getTime() <= Date.now())
+                if (
+                    !slot ||
+                    bookingClosesAt(date, period, schedule.booking_cutoff) <=
+                        Date.now()
+                )
                     return 0;
                 return Math.max(
                     0,
@@ -155,6 +160,7 @@ records.get('/state', async (c) => {
                     afternoon: remaining('afternoon'),
                     reserved,
                     dailyRemaining,
+                    bookingCutoff: schedule?.booking_cutoff,
                 },
             ];
         }),
@@ -198,20 +204,20 @@ records.post('/visits', async (c) => {
     const data = await body(c.req.raw);
     if (
         Object.keys(data).some(
-            (key) => !['date', 'period', 'service', 'notes'].includes(key),
+            (key) =>
+                !['date', 'period', 'service', 'services', 'notes'].includes(
+                    key,
+                ),
         )
     )
         fail(422, 'Only reservation details can be submitted.');
     const date = text(data.date, 'clinic date', 10, 10);
     const period = text(data.period, 'booking period', 12) as Period;
-    const service = text(data.service, 'service', 30) as Service;
+    const services = bookingServices(data.services ?? [data.service]);
+    if (!services)
+        return fail(422, 'Choose one or more available clinic services.');
     const notes = text(data.notes ?? '', 'appointment notes', 1000);
-    if (
-        !Object.hasOwn(PERIODS, period) ||
-        !Object.hasOwn(SERVICES, service) ||
-        !bookingDates().includes(date) ||
-        periodStarts(date, period).getTime() <= Date.now()
-    )
+    if (!Object.hasOwn(PERIODS, period) || !bookingDates().includes(date))
         fail(422, 'Choose an open clinic date and period within four weeks.');
     const client = await pool.connect();
     try {
@@ -232,6 +238,10 @@ records.post('/visits', async (c) => {
             )
         ).rows[0];
         if (!slot) fail(409, 'This booking period is unavailable.');
+        if (
+            bookingClosesAt(date, period, schedule.booking_cutoff) <= Date.now()
+        )
+            fail(409, 'Booking has ended for this period.');
         const reservations = await client.query(
             `SELECT a.student_id,a.appointment_slot_id,
             COALESCE(t.period,CASE WHEN t.starts_at::time < '12:00'::time THEN 'morning' ELSE 'afternoon' END) AS period
@@ -239,6 +249,15 @@ records.post('/visits', async (c) => {
             WHERE t.clinic_schedule_id=$1 AND a.status<>'cancelled'`,
             [schedule.id],
         );
+        if (
+            reservations.rows.some(
+                (row) => String(row.student_id) === String(c.get('studentId')),
+            )
+        )
+            fail(
+                409,
+                'You already have an appointment on this date. Cancel it before booking a different period.',
+            );
         const periodRows = reservations.rows.filter(
             (row) => row.period === period,
         );
@@ -250,14 +269,22 @@ records.post('/visits', async (c) => {
             ).length >= slot.capacity
         )
             fail(409, 'This booking period is full. Please choose another.');
-        if (periodRows.some((row) => row.student_id === c.get('studentId')))
-            fail(409, 'You already have an appointment in this period.');
         const id = randomUUID();
         const reference = 'NEU-' + id.slice(0, 8).toUpperCase();
         await client.query(
-            `INSERT INTO public.appointments(mobile_id,student_id,appointment_slot_id,reference,service,status,notes,created_at,updated_at)
-            VALUES($1,$2,$3,$4,$5,'scheduled',$6,(now() AT TIME ZONE 'Asia/Manila'),(now() AT TIME ZONE 'Asia/Manila'))`,
-            [id, c.get('studentId'), slot.id, reference, service, notes],
+            `INSERT INTO public.appointments(mobile_id,student_id,appointment_slot_id,reference,service,services,status,notes,created_at,updated_at)
+            VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7,(now() AT TIME ZONE 'Asia/Manila'),(now() AT TIME ZONE 'Asia/Manila'))`,
+            [
+                id,
+                c.get('studentId'),
+                slot.id,
+                reference,
+                services[0] === 'medical_clearance_submission'
+                    ? 'document_submission'
+                    : services[0],
+                JSON.stringify(services),
+                notes,
+            ],
         );
         await client.query('COMMIT');
         return c.json({ id, reference }, 201);

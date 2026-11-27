@@ -35,7 +35,6 @@ export default function ScheduledStudents({
             <Head title="Scheduled students" />
             <div className="clinic-page">
                 <PageHeading
-                    eyebrow="DAILY CLINIC ROSTER"
                     title="Scheduled students"
                     description={
                         'Students booked for ' +

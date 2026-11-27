@@ -20,6 +20,7 @@ import {
     bookVisit,
     cancelVisit,
     dateLabel,
+    bookingClosesAt,
     periodStarts,
     updateContact,
 } from './src/domain';
@@ -163,6 +164,33 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     );
 }
 
+function visitTransaction(visit: Visit) {
+    const primary =
+        visit.service === 'document_submission'
+            ? {
+                  label: 'Document submission',
+                  icon: 'document-text-outline' as const,
+              }
+            : SERVICES[visit.service];
+
+    return {
+        ...primary,
+        label: (visit.services ?? [visit.service])
+            .map((service) =>
+                service === 'document_submission'
+                    ? 'Document submission'
+                    : SERVICES[service].label,
+            )
+            .join(', '),
+    };
+}
+
+function visitTime(visit: Visit) {
+    return (
+        visit.timeRange ?? PERIODS[visit.period].time.replace('\u2013', ' to ')
+    );
+}
+
 function VisitCard({ visit, onPress }: { visit: Visit; onPress: () => void }) {
     const c = useTheme();
     return (
@@ -170,7 +198,7 @@ function VisitCard({ visit, onPress }: { visit: Visit; onPress: () => void }) {
             onPress={onPress}
             accessibilityLabel={
                 'Open ' +
-                SERVICES[visit.service].label +
+                visitTransaction(visit).label +
                 ' appointment on ' +
                 dateLabel(visit.date)
             }
@@ -188,12 +216,12 @@ function VisitCard({ visit, onPress }: { visit: Visit; onPress: () => void }) {
                         padding: 12,
                     }}
                 >
-                    <Icon name={SERVICES[visit.service].icon} />
+                    <Icon name={visitTransaction(visit).icon} />
                 </View>
                 <Badge tone={tone(visit.status)}>{LABELS[visit.status]}</Badge>
             </View>
             <T size={17} weight="600">
-                {SERVICES[visit.service].label}
+                {visitTransaction(visit).label}
             </T>
             <View style={[row, { marginTop: 12, gap: 7 }]}>
                 <Icon name="calendar-outline" size={15} color={c.muted} />
@@ -204,7 +232,7 @@ function VisitCard({ visit, onPress }: { visit: Visit; onPress: () => void }) {
             <View style={[row, { marginTop: 6, gap: 7 }]}>
                 <Icon name="time-outline" size={15} color={c.muted} />
                 <T size={12} color={c.muted}>
-                    {PERIODS[visit.period].label} · {PERIODS[visit.period].time}
+                    {visitTime(visit)}
                 </T>
             </View>
             <View
@@ -375,23 +403,32 @@ function BookingForm({
     onBook: (next: PrototypeState) => Promise<void>;
 }) {
     const c = useTheme();
-    const dates = bookingDates();
-    const [service, setService] = useState<Service>('physical_exam');
+    const dates = bookingDates(new Date(), state.connected === true);
+    const [services, setServices] = useState<Service[]>([]);
+    const bookedDates = new Set(
+        state.visits
+            .filter((visit) => visit.status !== 'cancelled')
+            .map((visit) => visit.date),
+    );
     const [date, setDate] = useState(
         dates.find((day) => {
             const slots = availability(state, day);
-            return slots.morning > 0 || slots.afternoon > 0;
+            return (
+                !bookedDates.has(day) &&
+                (slots.morning > 0 || slots.afternoon > 0)
+            );
         }) ?? dates[0],
     );
     const [period, setPeriod] = useState<Period | null>(null);
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
     const slots = availability(state, date);
+    const occupied = bookedDates.has(date);
     async function submit() {
-        if (!period) return;
+        if (!period || !services.length || occupied || busy) return;
         try {
             setError('');
-            await onBook(bookVisit(state, { date, service, period, notes }));
+            await onBook(bookVisit(state, { date, services, period, notes }));
         } catch (error) {
             setError(
                 error instanceof Error
@@ -404,31 +441,60 @@ function BookingForm({
         <>
             <Badge>CLINIC APPOINTMENT</Badge>
             <T size={13} color={c.muted}>
-                Choose a service, a clinic date, and a booking period. Your
-                appointment is shared with the clinic staff portal.
+                Choose one or more services, a clinic date, and a booking
+                period. Your appointment is shared with the clinic staff portal.
             </T>
             <Eyebrow label="01 / YOUR VISIT" />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 {(Object.keys(SERVICES) as Service[]).map((key) => (
                     <Pressable
                         key={key}
-                        accessibilityRole="button"
+                        accessibilityRole="checkbox"
                         accessibilityLabel={SERVICES[key].label}
-                        accessibilityState={{ selected: service === key }}
+                        accessibilityState={{
+                            checked: services.includes(key),
+                            disabled: busy,
+                        }}
                         disabled={busy}
-                        onPress={() => setService(key)}
+                        onPress={() =>
+                            setServices((selected) =>
+                                selected.includes(key)
+                                    ? selected.filter(
+                                          (service) => service !== key,
+                                      )
+                                    : [...selected, key],
+                            )
+                        }
                         style={{
                             width: '48%',
                             padding: 14,
                             borderRadius: 16,
-                            borderColor: service === key ? c.green : c.border,
+                            borderColor: services.includes(key)
+                                ? c.green
+                                : c.border,
                             borderWidth: 1,
-                            backgroundColor:
-                                service === key ? c.greenSoft : c.surface,
+                            backgroundColor: services.includes(key)
+                                ? c.greenSoft
+                                : c.surface,
                             gap: 8,
                         }}
                     >
-                        <Icon name={SERVICES[key].icon} size={24} />
+                        <View
+                            style={[row, { justifyContent: 'space-between' }]}
+                        >
+                            <Icon name={SERVICES[key].icon} size={24} />
+                            <Icon
+                                name={
+                                    services.includes(key)
+                                        ? 'checkbox'
+                                        : 'square-outline'
+                                }
+                                size={20}
+                                color={
+                                    services.includes(key) ? c.green : c.muted
+                                }
+                            />
+                        </View>
                         <T size={12} weight="600">
                             {SERVICES[key].short}
                         </T>
@@ -436,7 +502,9 @@ function BookingForm({
                 ))}
             </View>
             <T size={12} color={c.muted}>
-                {SERVICES[service].description}
+                {services.length
+                    ? `${services.length} selected: ${services.map((service) => SERVICES[service].label).join(', ')}`
+                    : 'Select at least one service. All selected services share one appointment reference.'}
             </T>
             <Eyebrow label="02 / CHOOSE A DATE" />
             <Calendar
@@ -449,14 +517,19 @@ function BookingForm({
                 }}
             />
             <Eyebrow label="03 / BOOKING PERIOD" />
+            {occupied && (
+                <T size={12} color={c.muted}>
+                    You already have a booking on this date. Cancel it before
+                    choosing a different period.
+                </T>
+            )}
             {(Object.keys(PERIODS) as Period[]).map((key) => {
-                const occupied = state.visits.some(
-                    (visit) =>
-                        visit.date === date &&
-                        visit.period === key &&
-                        visit.status !== 'cancelled',
-                );
-                const started = periodStarts(date, key).getTime() <= Date.now();
+                const ended =
+                    bookingClosesAt(
+                        date,
+                        key,
+                        state.slots?.[date]?.bookingCutoff,
+                    ) <= Date.now();
                 const disabled = slots[key] <= 0 || occupied || busy;
                 return (
                     <Pressable
@@ -504,10 +577,10 @@ function BookingForm({
                             <T size={11} color={c.muted}>
                                 {occupied
                                     ? 'Already booked'
-                                    : started
-                                      ? 'Started'
+                                    : ended
+                                      ? 'Booking closed'
                                       : slots[key] <= 0
-                                        ? 'Full'
+                                        ? 'Unavailable'
                                         : slots[key] + ' places left'}
                             </T>
                         </View>
@@ -531,15 +604,15 @@ function BookingForm({
             )}
             <Button
                 loading={busy}
-                disabled={!period}
+                disabled={!period || !services.length || occupied}
                 icon="checkmark"
                 onPress={() => void submit()}
             >
                 Reserve appointment
             </Button>
             <T size={11} color={c.muted} style={{ textAlign: 'center' }}>
-                Clinic times use Philippine time. Full or started periods cannot
-                be booked.
+                Booking closes at the clinic cutoff or when the period ends,
+                whichever comes first (Philippine time).
             </T>
         </>
     );
@@ -1707,28 +1780,26 @@ function StudentApp() {
         return (
             <>
                 <Badge tone={tone(visit.status)}>{LABELS[visit.status]}</Badge>
-                <T size={24} weight="700">
-                    {SERVICES[visit.service].label}
-                </T>
                 <Card>
+                    <InfoRow label="Student" value={state.profile.name} />
+                    <InfoRow label="Course" value={state.profile.program} />
                     <InfoRow
-                        label="Clinic date"
+                        label="College"
+                        value={state.profile.college || 'Not recorded'}
+                    />
+                    <InfoRow
+                        label="Transaction"
+                        value={visitTransaction(visit).label}
+                    />
+                    <InfoRow
+                        label="Date"
                         value={dateLabel(visit.date, {
-                            weekday: 'long',
                             month: 'long',
                             day: 'numeric',
                             year: 'numeric',
                         })}
                     />
-                    <InfoRow
-                        label="Booking period"
-                        value={
-                            PERIODS[visit.period].label +
-                            ' · ' +
-                            PERIODS[visit.period].time
-                        }
-                    />
-                    <InfoRow label="Student" value={state.profile.name} />
+                    <InfoRow label="Time" value={visitTime(visit)} />
                     <InfoRow
                         label="Booking reference"
                         value={visit.reference}

@@ -1,22 +1,16 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import {
-    ArrowLeft,
-    HeartPulse,
-    LoaderCircle,
-    Pencil,
-    Save,
-} from 'lucide-react';
+import { ArrowLeft, HeartPulse, LoaderCircle, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ClearanceHistory } from '@/components/clearance-history';
 import {
     dateLabel,
     Field,
-    PageHeading,
     SectionHeading,
     StatusBadge,
 } from '@/components/clinic-ui';
 import { StudentDialog } from '@/components/student-dialog';
+import { StudentRecordHeading } from '@/components/student-record-heading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { index, show, update } from '@/routes/clearances';
@@ -101,89 +95,94 @@ function ClearanceEditor({ student, record, school_year, history }: Props) {
     return (
         <>
             <Head title={'Medical record · ' + student.name} />
-            <div className="clinic-page">
+            <div className="clinic-page @container gap-5">
                 <Link
                     href={index({ query: { school_year } })}
-                    className="flex w-fit items-center gap-2 text-xs text-muted-foreground hover:text-primary"
+                    className="flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary"
                 >
-                    <ArrowLeft className="size-3.5" />
+                    <ArrowLeft className="size-4" />
                     Back to medical clearances
                 </Link>
-                <PageHeading
-                    eyebrow="SCHOOL-YEAR MEDICAL RECORD"
-                    title={student.name}
-                    description={student.student_number + ' · ' + school_year}
+                <StudentRecordHeading
+                    student={student}
+                    onEdit={() => setEditing(true)}
                 >
-                    <Button variant="outline" onClick={() => setEditing(true)}>
-                        <Pencil className="size-3.5" />
-                        Edit student information
-                    </Button>
-                </PageHeading>
-                <section className="panel flex flex-wrap items-end justify-between gap-4 p-5">
-                    <div>
-                        <p className="text-xs font-medium">
-                            Current student information
-                        </p>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                            {student.program} · Year {student.year_level}
-                        </p>
-                    </div>
-                    <form
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            router.get(show.url(student.id), {
-                                school_year: targetYear,
-                            });
-                        }}
-                        className="flex items-end gap-2"
-                    >
-                        <Field
-                            label="School year"
-                            htmlFor="record-year"
-                            error={errors.school_year ?? pageErrors.school_year}
+                    <div className="grid items-start gap-4 border-t bg-muted/25 px-4 py-4 sm:px-5 @2xl:grid-cols-[minmax(0,1fr)_15rem]">
+                        <div className="min-w-0">
+                            <p className="text-xs font-medium text-muted-foreground">
+                                Current enrollment
+                            </p>
+                            <p className="mt-1 text-sm wrap-anywhere">
+                                {student.program} · Year {student.year_level}
+                            </p>
+                        </div>
+                        <form
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                router.get(show.url(student.id), {
+                                    school_year: targetYear,
+                                });
+                            }}
                         >
-                            <Input
-                                id="record-year"
-                                className="w-36"
-                                value={targetYear}
-                                onChange={(event) =>
-                                    setTargetYear(event.target.value)
+                            <Field
+                                label="School year"
+                                htmlFor="record-year"
+                                error={
+                                    errors.school_year ?? pageErrors.school_year
                                 }
-                                placeholder="2026-2027"
-                                pattern="[0-9]{4}-[0-9]{4}"
-                                required
-                            />
-                        </Field>
-                        <Button variant="outline">Open year</Button>
-                    </form>
-                </section>
+                            >
+                                <div className="flex items-start gap-2">
+                                    <Input
+                                        id="record-year"
+                                        className="min-w-0 flex-1"
+                                        value={targetYear}
+                                        onChange={(event) =>
+                                            setTargetYear(event.target.value)
+                                        }
+                                        placeholder="2026-2027"
+                                        pattern="[0-9]{4}-[0-9]{4}"
+                                        required
+                                    />
+                                    <Button type="submit" variant="outline">
+                                        Open year
+                                    </Button>
+                                </div>
+                            </Field>
+                        </form>
+                    </div>
+                </StudentRecordHeading>
                 <form onSubmit={submit} className="space-y-5">
-                    <fieldset disabled={form.processing} className="space-y-5">
+                    <fieldset
+                        disabled={form.processing}
+                        className="min-w-0 space-y-5"
+                    >
                         <section className="panel">
                             <SectionHeading
                                 title={'Medical clearance · ' + school_year}
                                 description={
                                     record
-                                        ? 'Update this school-year record. Other years are preserved.'
-                                        : 'The first save will create this school-year record.'
+                                        ? undefined
+                                        : 'Save to create a clearance record for this school year.'
                                 }
                             >
                                 <StatusBadge status={form.data.status} />
                             </SectionHeading>
                             {snapshot && (
-                                <div className="mx-5 mb-5 rounded-xl border bg-muted/35 p-4 text-xs leading-6">
-                                    <p className="font-medium">
+                                <div className="mx-4 mb-4 flex flex-wrap items-start gap-x-6 gap-y-2 rounded-lg border bg-muted/35 px-4 py-3 text-sm sm:mx-5">
+                                    <p className="font-medium text-muted-foreground">
                                         Student information saved with this
                                         record
                                     </p>
-                                    <p>
-                                        {snapshot.name} ·{' '}
-                                        {snapshot.student_number}
-                                    </p>
-                                    <p className="text-muted-foreground">
-                                        {snapshot.program} · Year{' '}
-                                        {snapshot.year_level}
-                                    </p>
+                                    <div className="min-w-0 wrap-anywhere">
+                                        <p>
+                                            {snapshot.name} ·{' '}
+                                            {snapshot.student_number}
+                                        </p>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            {snapshot.program} · Year{' '}
+                                            {snapshot.year_level}
+                                        </p>
+                                    </div>
                                 </div>
                             )}
                             <div className="border-t p-5">
@@ -191,7 +190,7 @@ function ClearanceEditor({ student, record, school_year, history }: Props) {
                                     <HeartPulse className="size-4 text-primary" />
                                     Physical examination
                                 </h3>
-                                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                <div className="grid gap-4 @lg:grid-cols-2 @3xl:grid-cols-3">
                                     {(
                                         [
                                             ['height_cm', 'Height (cm)', '0.1'],
@@ -240,7 +239,7 @@ function ClearanceEditor({ student, record, school_year, history }: Props) {
                                 <h3 className="mb-4 text-sm font-semibold">
                                     Eye test
                                 </h3>
-                                <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="grid gap-4 @lg:grid-cols-2">
                                     {(
                                         [
                                             ['eye_left', 'Left eye grade'],
@@ -301,7 +300,7 @@ function ClearanceEditor({ student, record, school_year, history }: Props) {
                                         className="sm:max-w-xs"
                                     />
                                 </Field>
-                                <div className="grid gap-4 sm:grid-cols-3">
+                                <div className="grid gap-4 @2xl:grid-cols-3">
                                     {(
                                         [
                                             ['has_cough', 'Cough?'],
@@ -383,7 +382,7 @@ function ClearanceEditor({ student, record, school_year, history }: Props) {
                                 description="Verify the three requirements before issuing clearance."
                             />
                             <div className="space-y-5 px-5 pb-5">
-                                <div className="grid gap-3 sm:grid-cols-3">
+                                <div className="grid gap-3 @2xl:grid-cols-3">
                                     {(
                                         [
                                             [
@@ -401,9 +400,9 @@ function ClearanceEditor({ student, record, school_year, history }: Props) {
                                         ] as const
                                     ).map(([key, label]) => (
                                         <div key={key}>
-                                            <label className="flex items-center gap-3 rounded-xl border p-4 text-xs">
+                                            <label className="flex h-full items-center gap-3 rounded-lg border p-4 text-sm">
                                                 <input
-                                                    className="size-4 accent-primary"
+                                                    className="size-4 shrink-0 accent-primary"
                                                     type="checkbox"
                                                     checked={form.data[key]}
                                                     onChange={(event) =>

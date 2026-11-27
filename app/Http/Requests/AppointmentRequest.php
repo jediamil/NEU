@@ -18,14 +18,16 @@ class AppointmentRequest extends FormRequest
     {
         $appointment = $this->route('appointment');
         $services = array_keys(Appointment::SERVICES);
-        if ($appointment instanceof Appointment && isset(Appointment::LEGACY_SERVICES[$appointment->service])) {
-            $services[] = $appointment->service;
+        if ($appointment instanceof Appointment) {
+            $services = [...$services, ...array_intersect($appointment->services ?? [$appointment->service], array_keys(Appointment::LEGACY_SERVICES))];
         }
 
         return [
             'student_id' => ['required', 'integer', 'exists:students,id'],
             'appointment_slot_id' => ['required', 'integer', 'exists:appointment_slots,id'],
-            'service' => ['required', Rule::in($services)],
+            'service' => ['required_without:services', 'prohibits:services', Rule::in($services)],
+            'services' => ['required_without:service', 'array', 'list', 'min:1', 'max:'.count($services)],
+            'services.*' => ['required', 'string', 'distinct:strict', Rule::in($services)],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

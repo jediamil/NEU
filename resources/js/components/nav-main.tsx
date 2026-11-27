@@ -14,17 +14,25 @@ export function NavMain({ items }: { items: NavItem[] }) {
     const { setOpenMobile } = useSidebar();
 
     return (
-        <SidebarGroup className="px-2 py-0">
+        <SidebarGroup
+            role="navigation"
+            aria-label="Portal"
+            className="px-2 py-0"
+        >
             <SidebarMenu>
                 {items.map((item) => (
                     <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton
                             asChild
-                            isActive={isCurrentUrl(item.href)}
+                            isActive={isCurrentUrl(item.href, undefined, true)}
+                            className="h-10 gap-3 rounded-lg px-3"
                             tooltip={{ children: item.title }}
                         >
                             <Link
                                 href={item.href}
+                                aria-current={
+                                    isCurrentUrl(item.href) ? 'page' : undefined
+                                }
                                 prefetch
                                 onClick={() => setOpenMobile(false)}
                             >

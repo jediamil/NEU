@@ -32,10 +32,12 @@ class ClinicScheduleController extends Controller
                 'number' => $date->format('d'), 'is_today' => $date->isToday(), 'is_past' => $date->endOfDay()->isPast(),
                 'is_open' => $day->is_open ?? false, 'morning_capacity' => $day->morning_capacity ?? 24,
                 'afternoon_capacity' => $day->afternoon_capacity ?? 24, 'daily_capacity' => $day->daily_capacity ?? 48,
+                'booking_cutoff' => substr($day->booking_cutoff ?? '16:00', 0, 5),
                 'booked' => $day?->slots->sum('reserved_count') ?? 0,
                 'slots' => $day?->slots->whereNotNull('period')->map(fn (AppointmentSlot $slot) => [
                     'id' => $slot->id, 'label' => AppointmentSlot::PERIODS[$slot->bookingPeriod()],
                     'capacity' => $slot->capacity, 'reserved' => $day->reservedForPeriod($slot->bookingPeriod()),
+                    'booking_closes_at' => $day->bookingClosesAt($slot)->toIso8601String(),
                 ])->values() ?? [],
             ];
         });
@@ -50,7 +52,7 @@ class ClinicScheduleController extends Controller
             $schedule->generateSlots();
         });
 
-        return back()->with('success', 'Clinic schedule has been created.');
+        return to_route('schedules.index', ['week' => $request->validated('date')])->with('success', 'Clinic schedule has been created.');
     }
 
     public function update(ClinicScheduleRequest $request, ClinicSchedule $schedule): RedirectResponse
@@ -66,7 +68,7 @@ class ClinicScheduleController extends Controller
                 throw ValidationException::withMessages(['daily_capacity' => 'Daily capacity cannot be lower than existing reservations.']);
             }
             foreach (['morning', 'afternoon'] as $period) {
-                if ((int) $data[$period.'_capacity'] < (clone $reservations)->whereHas('slot', fn ($query) => $query->inPeriod($period))->count()) {
+                if ((int) $data[$period.'_capacity'] > 0 && (int) $data[$period.'_capacity'] < (clone $reservations)->whereHas('slot', fn ($query) => $query->inPeriod($period))->count()) {
                     throw ValidationException::withMessages([$period.'_capacity' => ucfirst($period).' capacity cannot be lower than existing reservations.']);
                 }
             }

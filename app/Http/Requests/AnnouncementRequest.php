@@ -20,6 +20,7 @@ class AnnouncementRequest extends FormRequest
             'body' => ['required', 'string', 'max:10000'],
             'audience' => ['required', Rule::in(['students', 'staff', 'everyone'])],
             'published' => ['required', 'boolean'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048', 'dimensions:max_width=6000,max_height=6000'],
         ];
     }
 }

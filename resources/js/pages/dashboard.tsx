@@ -64,23 +64,17 @@ export default function Dashboard({
 }: Props) {
     const { auth } = usePage().props;
     const clinic = auth.user.role === 'clinic';
-    const firstName = auth.user.name.split(' ')[0];
     const total = clearance.cleared + clearance.pending + clearance.incomplete;
     return (
         <>
             <Head title="Clinic overview" />
             <div className="clinic-page">
                 <PageHeading
-                    eyebrow={
-                        clinic
-                            ? 'YOUR CAMPUS. YOUR CARE.'
-                            : 'ENROLLMENT CLEARANCE'
-                    }
-                    title={'Welcome back, ' + firstName + '.'}
+                    title={clinic ? 'Clinic overview' : 'Registrar overview'}
                     description={
                         clinic
-                            ? 'A clear view of your clinic day. Let’s make every student visit a little easier.'
-                            : 'Verify student medical clearance and keep enrollment moving.'
+                            ? 'Review today’s appointments, clinic capacity, and clearance activity.'
+                            : 'Look up student medical clearance status for enrollment.'
                     }
                 >
                     <span className="mr-2 hidden items-center gap-2 text-xs text-muted-foreground xl:flex">
@@ -158,7 +152,7 @@ export default function Dashboard({
                         <section className="panel min-w-0">
                             <SectionHeading
                                 title="Today’s appointments"
-                                description="Keep each visit moving, from arrival to completion."
+                                description="Review student arrivals and appointment status."
                             >
                                 <Button
                                     variant="ghost"
@@ -323,7 +317,7 @@ export default function Dashboard({
                     <section className="panel">
                         <SectionHeading
                             title="Enrollment clearance"
-                            description="A snapshot of student readiness"
+                            description="Medical clearance totals by status"
                         >
                             <ShieldCheck className="size-4 text-primary" />
                         </SectionHeading>

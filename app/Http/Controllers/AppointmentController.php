@@ -28,13 +28,14 @@ class AppointmentController extends Controller
             ->when($filters['search'] ?? null, fn ($query, $search) => $query->where(fn ($query) => $query->where('reference', 'like', '%'.$search.'%')->orWhereHas('student', fn ($query) => $query->where('name', 'like', '%'.$search.'%')->orWhere('student_number', 'like', '%'.$search.'%'))))
             ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereHas('slot', fn ($query) => $query->whereDate('starts_at', $date)))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($filters['service'] ?? null, fn ($query, $service) => $query->where('service', $service))
+            ->when($filters['service'] ?? null, fn ($query, $service) => $query->where(fn ($query) => $query->where(fn ($query) => $query->whereNull('services')->where('service', $service))->orWhereJsonContains('services', $service)))
             ->orderByDesc('id')->paginate(10)->appends($filters)->through(fn (Appointment $appointment) => $appointment->summary());
 
         $slots = AppointmentSlot::query()->with(['schedule.slots' => fn ($query) => $query->withCount(['appointments as reserved_count' => fn ($query) => $query->where('status', '!=', 'cancelled')])])
             ->withCount(['appointments as reserved_count' => fn ($query) => $query->where('status', '!=', 'cancelled')])
-            ->whereNotNull('period')->where('starts_at', '>', now())->where('starts_at', '<=', now()->addDays(45))
+            ->whereNotNull('period')->where('ends_at', '>', now())->where('starts_at', '<=', now()->addDays(45))
             ->whereHas('schedule', fn ($query) => $query->where('is_open', true))->orderBy('starts_at')->get()
+            ->filter(fn (AppointmentSlot $slot) => $slot->schedule->bookingClosesAt($slot)->isFuture())->values()
             ->map(fn (AppointmentSlot $slot) => [
                 'id' => $slot->id, 'date' => $slot->starts_at->toDateString(),
                 'label' => AppointmentSlot::PERIODS[$slot->bookingPeriod()], 'period' => $slot->period,

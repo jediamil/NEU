@@ -150,7 +150,6 @@ export default function Login({ status, canResetPassword }: Props) {
     );
 }
 Login.layout = {
-    title: 'Welcome back.',
-    description:
-        'Sign in to manage clinic visits and support your campus community.',
+    title: 'Staff sign in',
+    description: 'Use your staff account to access the NEU Health Portal.',
 };

@@ -1,4 +1,3 @@
-import { Link } from '@inertiajs/react';
 import { ArrowUpRight, ClipboardCheck } from 'lucide-react';
 import {
     dateLabel,
@@ -6,7 +5,7 @@ import {
     SectionHeading,
     StatusBadge,
 } from '@/components/clinic-ui';
-import { Button } from '@/components/ui/button';
+import TextLink from '@/components/text-link';
 import { show } from '@/routes/clearances';
 import type { ClearanceRecord } from '@/types/clinic';
 
@@ -20,77 +19,90 @@ export function ClearanceHistory({
     return (
         <section className="panel min-w-0">
             <SectionHeading
-                title="School-year history"
-                description="Earlier records retain the student information saved with them."
+                title="School-year clearance history"
+                description="Shows the student information saved with each record."
             />
             {records.length ? (
-                <div className="overflow-x-auto">
+                <div className="@container overflow-x-auto">
                     <table className="clinic-table">
                         <thead>
                             <tr>
-                                <th>School year</th>
-                                <th>Student at time of record</th>
-                                <th>Status</th>
-                                <th>Reviewed</th>
-                                <th>
-                                    <span className="sr-only">Open record</span>
+                                <th scope="col" className="@lg:w-1/2">
+                                    School-year record
+                                </th>
+                                <th
+                                    scope="col"
+                                    className="hidden @lg:table-cell"
+                                >
+                                    Last reviewed
+                                </th>
+                                <th
+                                    scope="col"
+                                    className="w-px text-right @lg:w-36 @lg:text-left"
+                                >
+                                    Status
                                 </th>
                             </tr>
                         </thead>
                         <tbody>
-                            {records.map((record) => (
-                                <tr key={record.id}>
-                                    <td className="font-medium">
-                                        {record.school_year}
-                                    </td>
-                                    <td>
-                                        <p>
-                                            {record.student_snapshot?.name ??
-                                                'Not recorded'}
-                                        </p>
-                                        <p className="mt-1 text-[10px] text-muted-foreground">
-                                            {record.student_snapshot
-                                                ? record.student_snapshot
-                                                      .program +
-                                                  ' · Year ' +
-                                                  record.student_snapshot
-                                                      .year_level
-                                                : 'Snapshot available after saving'}
-                                        </p>
-                                    </td>
-                                    <td>
-                                        <StatusBadge status={record.status} />
-                                    </td>
-                                    <td className="text-xs text-muted-foreground">
-                                        {record.reviewed_at
-                                            ? dateLabel(record.reviewed_at)
-                                            : 'Not yet reviewed'}
-                                    </td>
-                                    <td>
-                                        <Button
-                                            asChild
-                                            size="icon"
-                                            variant="ghost"
-                                        >
-                                            <Link
+                            {records.map((record) => {
+                                const snapshot = record.student_snapshot;
+                                const reviewed = record.reviewed_at
+                                    ? dateLabel(record.reviewed_at)
+                                    : null;
+
+                                return (
+                                    <tr key={record.id}>
+                                        <td>
+                                            <TextLink
                                                 href={show(studentId, {
                                                     query: {
                                                         school_year:
                                                             record.school_year,
                                                     },
                                                 })}
-                                                aria-label={
-                                                    'Open ' +
-                                                    record.school_year +
-                                                    ' medical record'
-                                                }
+                                                className="inline-flex items-center gap-1.5 font-semibold text-primary"
+                                                aria-label={`Open ${record.school_year} medical record`}
                                             >
-                                                <ArrowUpRight className="size-4" />
-                                            </Link>
-                                        </Button>
-                                    </td>
-                                </tr>
-                            ))}
+                                                {record.school_year}
+                                                <ArrowUpRight
+                                                    className="size-3.5 shrink-0"
+                                                    aria-hidden="true"
+                                                />
+                                            </TextLink>
+                                            {snapshot ? (
+                                                <>
+                                                    <p className="mt-1 wrap-anywhere">
+                                                        {snapshot.name}
+                                                    </p>
+                                                    <p className="mt-1 text-xs wrap-anywhere text-muted-foreground">
+                                                        {snapshot.program} ·
+                                                        Year{' '}
+                                                        {snapshot.year_level}
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    No student information saved
+                                                </p>
+                                            )}
+                                            <p className="mt-2 text-xs text-muted-foreground @lg:hidden">
+                                                {reviewed
+                                                    ? `Reviewed ${reviewed}`
+                                                    : 'Not yet reviewed'}
+                                            </p>
+                                        </td>
+                                        <td className="hidden text-sm @lg:table-cell">
+                                            {reviewed ?? 'Not yet reviewed'}
+                                        </td>
+                                        <td className="text-right align-top @lg:text-left @lg:align-middle">
+                                            <StatusBadge
+                                                status={record.status}
+                                            />
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
